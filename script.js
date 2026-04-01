@@ -48,6 +48,21 @@ let network = null;
 let contextNodeId = null;
 let contextEdgeId = null;
 
+// 【核心修复机制】完美模拟你发现的“修改弹簧长度以解开死锁”的操作
+window.forcePhysicsUpdate = function() {
+    if (!network) return;
+    const currentEdgeLen = parseInt(document.getElementById('edgeLength').value) || 100;
+    network.setOptions({
+        edges: { smooth: { type: 'continuous' } }, // 强制拉直麻花边线
+        physics: {
+            enabled: true,
+            solver: 'forceAtlas2Based',
+            forceAtlas2Based: { springLength: currentEdgeLen } // 重新注入弹簧长度，打碎引擎缓存！
+        }
+    });
+    network.startSimulation();
+}
+
 function getStyleObject(node, updates) {
     node = node || {};
     let isPinned = updates.isPinned !== undefined ? updates.isPinned : (node.isPinned || false);
@@ -56,7 +71,6 @@ function getStyleObject(node, updates) {
 
     return {
         id: node.id || updates.id, label: label, isPinned: isPinned, customColor: customBorder, 
-        // 【底层强加固】强制使用对象形式，确保 vis.js 绝对能理解物理坐标的冻结与释放
         fixed: isPinned ? { x: true, y: true } : { x: false, y: false },
         borderWidth: isPinned ? 4 : 2, borderWidthSelected: isPinned ? 4 : 2,
         color: { background: isPinned ? '#f3f4f6' : '#ffffff', border: customBorder, highlight: { background: isPinned ? '#e5e7eb' : '#f0f4ff', border: customBorder } },
@@ -91,8 +105,7 @@ function initNetwork() {
     network.on("click", function (params) {
         if (params.event.srcEvent.shiftKey && params.nodes.length > 0) {
             updateNodeStyle(params.nodes[0], { isPinned: !nodesDataset.get(params.nodes[0]).isPinned });
-            // 单节点状态切换（尤其解绑）后，立刻踢醒休眠的物理引擎
-            if (network) network.startSimulation(); 
+            window.forcePhysicsUpdate(); // 解绑单点时，模拟拉动滑块操作
             closeContextMenu(); return;
         }
         closeContextMenu();
@@ -184,7 +197,7 @@ window.renderGraphFromText = function() {
     edgesDataset.clear();
     edgesDataset.add(newEdges);
 
-    setTimeout(() => { if (network) network.startSimulation(); }, 10);
+    setTimeout(() => { window.forcePhysicsUpdate(); }, 10);
 }
 
 // ==================== 4. 快捷键与面板控制 ====================
@@ -220,22 +233,19 @@ document.addEventListener('keydown', e => {
     }
 });
 
-document.addEventListener('keyup', e => {
-    activeKeys[e.code] = false;
-});
+document.addEventListener('keyup', e => { activeKeys[e.code] = false; });
 window.addEventListener('blur', () => { activeKeys = {}; });
 
 window.updateNodeSize = function(val) { if(network) { network.setOptions({ nodes: { font: { size: parseInt(val) } } }); } }
-window.updateEdgeLength = function(val) { if(network) { network.setOptions({ physics: { forceAtlas2Based: { springLength: parseInt(val) } } }); network.startSimulation(); } }
+window.updateEdgeLength = function(val) { window.forcePhysicsUpdate(); }
 window.pinAll = function() { if(!nodesDataset) return; nodesDataset.update(nodesDataset.get().map(node => getStyleObject(node, { isPinned: true }))); }
 
 window.unpinAll = function() { 
     if(!nodesDataset) return; 
     nodesDataset.update(nodesDataset.get().map(node => getStyleObject(node, { isPinned: false }))); 
-    if (network) network.startSimulation(); 
+    window.forcePhysicsUpdate(); // 解开所有节点时，强制模拟滑块重置引擎
 }
 
-// 树形排版，并彻底修复解除后的假死与麻花边线
 window.formatAsTree = function() {
     if (!network || !nodesDataset) return;
     const currentEdgeLen = parseInt(document.getElementById('edgeLength').value) || 100;
@@ -248,33 +258,21 @@ window.formatAsTree = function() {
     setTimeout(() => {
         let positions = network.getPositions();
         
-        // 【核心大修复】不仅要关闭层级，还要强行恢复边线的平滑类型（解开麻花），并强行把所有物理参数满血复活！
-        network.setOptions({
-            layout: { hierarchical: { enabled: false } },
-            edges: { smooth: { type: 'continuous' } }, // 彻底修复图里的边线扭曲
-            physics: { 
-                enabled: true, 
-                solver: 'forceAtlas2Based',
-                forceAtlas2Based: { 
-                    gravitationalConstant: -50, 
-                    centralGravity: 0.01, 
-                    springConstant: 0.06, 
-                    springLength: currentEdgeLen, 
-                    damping: 0.75, 
-                    avoidOverlap: 0.5 
-                }
-            } // 重置物理记忆
-        });
+        // 1. 先关闭层级结构
+        network.setOptions({ layout: { hierarchical: { enabled: false } } });
 
+        // 2. 将计算好的层级坐标固定写死到节点上
         let updates = nodesDataset.get().map(node => {
             let style = getStyleObject(node, { isPinned: true });
             if (positions[node.id]) { style.x = positions[node.id].x; style.y = positions[node.id].y; }
             return style;
         });
         nodesDataset.update(updates);
-        network.fit({ animation: { duration: 600, easingFunction: "easeInOutQuad" } });
         
-        network.startSimulation();
+        // 3. 施加你发现的魔法：强制刷新边线和物理参数
+        window.forcePhysicsUpdate();
+        
+        network.fit({ animation: { duration: 600, easingFunction: "easeInOutQuad" } });
     }, 50);
 }
 
