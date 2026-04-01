@@ -2,485 +2,64 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>图论数据生成器</title>
-    <style>
-        :root {
-            --primary-color: #4e6ef2;
-            --primary-hover-color: #3a5cd3;
-            --background-color: #f7f9fc;
-            --card-background: white;
-            --border-color: #ddd;
-            --text-color: #222;
-            --light-text-color: #666;
-            --shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-            --border-radius: 8px;
-            --padding-base: 16px;
-        }
-
-        * {
-            font-family: system-ui, sans-serif;
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-        body {
-            max-width: 800px;
-            margin: 40px auto;
-            padding: var(--padding-base);
-            background: var(--background-color);
-            color: var(--text-color);
-        }
-        .card {
-            background: var(--card-background);
-            padding: var(--padding-base) 24px;
-            border-radius: var(--border-radius);
-            box-shadow: var(--shadow);
-        }
-        h1 {
-            margin-top: 0;
-            margin-bottom: var(--padding-base);
-            color: var(--text-color);
-            text-align: center;
-        }
-        .row {
-            display: flex;
-            align-items: center;
-            margin-bottom: 12px;
-            flex-wrap: wrap; /* Allow wrapping on small screens */
-        }
-        label {
-            display: inline-block;
-            width: 120px;
-            min-width: 120px; /* Ensure label takes space */
-            font-weight: 500;
-            margin-right: 12px;
-            color: var(--light-text-color);
-        }
-        input, select, button {
-            padding: 10px 14px;
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius);
-            font-size: 15px;
-            flex-grow: 1; /* Allow inputs to grow */
-            max-width: calc(100% - 132px); /* Adjust for label width + margin */
-        }
-        input:focus, select:focus, button:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 2px rgba(78, 110, 242, 0.2);
-        }
-        input[type="number"] {
-            -moz-appearance: textfield; /* Firefox */
-        }
-        input[type="number"]::-webkit-outer-spin-button,
-        input[type="number"]::-webkit-inner-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
-
-        button {
-            background: var(--primary-color);
-            color: white;
-            border: none;
-            cursor: pointer;
-            flex-grow: 0; /* Buttons don't grow */
-            max-width: unset; /* Remove max-width constraint */
-            transition: background 0.2s ease, transform 0.1s ease;
-        }
-        button:hover {
-            background: var(--primary-hover-color);
-            transform: translateY(-1px);
-        }
-        button:active {
-            transform: translateY(0);
-        }
-        button:disabled {
-            background: #cccccc;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .button-group {
-            display: flex;
-            justify-content: center;
-            gap: 12px; /* Space between buttons */
-            margin-top: 20px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        }
-        .button-group button {
-            flex-shrink: 0;
-        }
-
-        textarea {
-            width: 100%;
-            height: 240px;
-            padding: var(--padding-base);
-            border-radius: var(--border-radius);
-            border: 1px solid var(--border-color);
-            resize: vertical;
-            font-family: monospace;
-            font-size: 14px;
-            line-height: 1.5;
-            background: #fdfdfd;
-            color: var(--text-color);
-        }
-        textarea::placeholder {
-            color: #aaa;
-        }
-
-        /* Disabled input styling */
-        input:disabled, select:disabled {
-            background: #e9ecef;
-            border-color: #ced4da;
-            color: #6c757d;
-            cursor: not-allowed;
-        }
-
-        /* Copy message feedback */
-        .copy-feedback {
-            margin-left: 10px;
-            font-size: 14px;
-            color: green;
-            opacity: 0;
-            transition: opacity 0.3s ease-in-out;
-        }
-        .copy-feedback.show {
-            opacity: 1;
-        }
-        .copy-feedback.error {
-            color: red;
-        }
-
-        @media (max-width: 600px) {
-            .row {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            label {
-                width: 100%;
-                margin-bottom: 6px;
-            }
-            input, select {
-                max-width: 100%;
-                width: 100%;
-            }
-            .button-group {
-                flex-direction: column;
-            }
-            .button-group button {
-                width: 100%;
-            }
-        }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图论数据生成器 & 实时预览</title>
+    <!-- 引入外部的 CSS 样式文件 -->
+    <link rel="stylesheet" href="style.css">
+    <!-- 引入 vis-network 图形库 -->
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
 </head>
 <body>
-<div class="card">
-    <h1>图论随机数据生成器</h1>
 
-    <div class="row">
-        <label for="n">节点数量 n:</label>
-        <input type="number" id="n" value="10" min="1" max="10000">
+<div class="container">
+    <!-- 左侧控制面板与数据区 -->
+    <div class="panel left-panel">
+        <h1>图论数据生成器</h1>
+        
+        <div class="controls">
+            <div class="row">
+                <label>节点数量 n:</label>
+                <input type="number" id="n" value="10" min="1" max="500">
+            </div>
+            <div class="row">
+                <label>边数 m:</label>
+                <input type="number" id="m" value="15" min="0" max="10000">
+            </div>
+            <div class="row">
+                <label>最大边权:</label>
+                <input type="number" id="maxw" value="10" min="1" max="1000">
+            </div>
+            <div class="row">
+                <label>生成类型:</label>
+                <select id="type">
+                    <option value="tree">随机树 (Prüfer序列)</option>
+                    <option value="chain">链</option>
+                    <option value="daisy">菊花图</option>
+                    <option value="binary">二叉树</option>
+                    <option value="graph">随机无向图</option>
+                    <option value="w_tree">带权随机树 (Prüfer序列)</option>
+                </select>
+            </div>
+            <div class="button-group">
+                <button onclick="generateData()">生成数据</button>
+                <button onclick="copyOutput()" class="btn-secondary">一键复制</button>
+                <span id="copyFeedback" class="copy-feedback"></span>
+            </div>
+        </div>
+
+        <div class="textarea-container">
+            <p class="hint">你可以直接在此处修改数据，右侧图形会实时同步更新：</p>
+            <textarea id="output" spellcheck="false"></textarea>
+        </div>
     </div>
 
-    <div class="row">
-        <label for="m">边数 m (仅图):</label>
-        <input type="number" id="m" value="15" min="0" max="100000">
+    <!-- 右侧图形预览区 -->
+    <div class="panel right-panel">
+        <div id="mynetwork"></div>
     </div>
-
-    <div class="row">
-        <label for="maxw">最大边权:</label>
-        <input type="number" id="maxw" value="10" min="1" max="1000">
-    </div>
-
-    <div class="row">
-        <label for="type">生成类型:</label>
-        <select id="type">
-            <option value="tree">随机树 (Prüfer序列)</option>
-            <option value="chain">链</option>
-            <option value="daisy">菊花图</option>
-            <option value="binary">二叉树</option>
-            <option value="graph">随机无向图</option>
-            <option value="w_tree">带权随机树 (Prüfer序列)</option>
-        </select>
-    </div>
-
-    <div class="button-group">
-        <button onclick="generate()">生成数据</button>
-        <button onclick="copyOutput()">一键复制</button>
-        <span id="copyFeedback" class="copy-feedback"></span>
-    </div>
-
-    <textarea id="output" placeholder="生成结果将显示在这里……"></textarea>
 </div>
 
-<script>
-// Utility function for random number in range [l, r]
-function rand(l, r) {
-    return Math.floor(Math.random() * (r - l + 1)) + l;
-}
-
-// Helper to insert a value into a sorted array while maintaining sort order
-function insertSorted(arr, val) {
-    let low = 0, high = arr.length - 1;
-    while (low <= high) {
-        let mid = Math.floor((low + high) / 2);
-        if (arr[mid] < val) {
-            low = mid + 1;
-        } else {
-            high = mid - 1;
-        }
-    }
-    arr.splice(low, 0, val);
-}
-
-// Generates a random tree using Prüfer sequence
-function genTree(n) {
-    if (n <= 1) return n + '\n';
-    if (n === 2) return n + '\n1 2\n'; // Prüfer sequence not applicable for n < 3
-
-    let res = n + '\n';
-    let edges = [];
-    let degree = new Array(n + 1).fill(1); // All nodes initially have degree 1
-    let sequence = [];
-
-    // 1. Generate random Prüfer sequence of length n-2
-    for (let i = 0; i < n - 2; i++) {
-        let node = rand(1, n);
-        sequence.push(node);
-        degree[node]++; // Increment degree for nodes in the sequence
-    }
-
-    // 2. Convert Prüfer sequence to tree edges
-    let leaves = [];
-    for (let i = 1; i <= n; i++) {
-        if (degree[i] === 1) { // Find initial leaves (degree 1)
-            leaves.push(i);
-        }
-    }
-    leaves.sort((a, b) => a - b); // Keep leaves sorted to always pick the smallest
-
-    for (let i = 0; i < n - 2; i++) {
-        let u = leaves.shift(); // Get the smallest available leaf
-        let v = sequence[i];    // Get the next node from the Prüfer sequence
-
-        edges.push(`${u} ${v}`); // Add edge (u, v)
-
-        degree[v]--; // Decrement degree of v
-        if (degree[v] === 1) { // If v becomes a new leaf
-            insertSorted(leaves, v); // Add v to the sorted leaves list
-        }
-    }
-
-    // 3. The last edge connects the two remaining nodes in the leaves list
-    edges.push(`${leaves[0]} ${leaves[1]}`);
-
-    return res + edges.join('\n');
-}
-
-// Generates a chain graph
-function genChain(n) {
-    let res = n + '\n';
-    if (n <= 1) return res;
-    for (let i = 1; i < n; i++) res += i + ' ' + (i + 1) + '\n';
-    return res.trim();
-}
-
-// Generates a daisy (star) graph
-function genDaisy(n) {
-    let res = n + '\n';
-    if (n <= 1) return res;
-    for (let i = 2; i <= n; i++) res += '1 ' + i + '\n';
-    return res.trim();
-}
-
-// Generates a binary tree structure
-function genBinary(n) {
-    let res = n + '\n';
-    if (n <= 1) return res;
-    for (let i = 1; i <= n; i++) {
-        if (i * 2 <= n) res += i + ' ' + (i * 2) + '\n';
-        if (i * 2 + 1 <= n) res += i + ' ' + (i * 2 + 1) + '\n';
-    }
-    return res.trim();
-}
-
-// Generates a random undirected graph
-function genGraph(n, m) {
-    let set = new Set();
-    const maxPossibleEdges = n * (n - 1) / 2;
-    m = Math.min(m, maxPossibleEdges); // Ensure m does not exceed maximum possible edges
-
-    while (set.size < m) {
-        let u = rand(1, n), v = rand(1, n);
-        if (u === v) continue;
-        if (u > v) [u, v] = [v, u]; // Normalize edge (u, v) to (min, max)
-        set.add(u + ',' + v);
-    }
-    let res = n + ' ' + m + '\n'; // Use the actual generated m
-    for (let s of set) res += s.replace(',', ' ') + '\n';
-    return res.trim();
-}
-
-// Generates a random tree with weights using Prüfer sequence
-function genWeightTree(n, maxw) {
-    if (n <= 1) return n + '\n';
-    if (n === 2) return n + '\n1 2 ' + rand(1, maxw) + '\n';
-
-    let res = n + '\n';
-    let edges = [];
-    let degree = new Array(n + 1).fill(1);
-    let sequence = [];
-
-    // Generate random Prüfer sequence
-    for (let i = 0; i < n - 2; i++) {
-        let node = rand(1, n);
-        sequence.push(node);
-        degree[node]++;
-    }
-
-    // Convert Prüfer sequence to tree edges with weights
-    let leaves = [];
-    for (let i = 1; i <= n; i++) {
-        if (degree[i] === 1) {
-            leaves.push(i);
-        }
-    }
-    leaves.sort((a, b) => a - b);
-
-    for (let i = 0; i < n - 2; i++) {
-        let u = leaves.shift();
-        let v = sequence[i];
-        let w = rand(1, maxw); // Assign random weight
-        edges.push(`${u} ${v} ${w}`);
-
-        degree[v]--;
-        if (degree[v] === 1) {
-            insertSorted(leaves, v);
-        }
-    }
-
-    // Last edge with weight
-    let w = rand(1, maxw);
-    edges.push(`${leaves[0]} ${leaves[1]} ${w}`);
-
-    return res + edges.join('\n');
-}
-
-// Main generation function
-function generate() {
-    const nInput = document.getElementById('n');
-    const mInput = document.getElementById('m');
-    const maxwInput = document.getElementById('maxw');
-    const typeSelect = document.getElementById('type');
-    const outputElem = document.getElementById('output');
-
-    let n = parseInt(nInput.value);
-    let m = parseInt(mInput.value);
-    let maxw = parseInt(maxwInput.value);
-    const type = typeSelect.value;
-
-    // Basic input validation
-    if (isNaN(n) || n < 1 || n > 10000) {
-        outputElem.value = '错误: 节点数量 n 必须是 1 到 10000 之间的整数。';
-        return;
-    }
-
-    let out = '';
-    switch (type) {
-        case 'tree':
-            out = genTree(n);
-            break;
-        case 'chain':
-            out = genChain(n);
-            break;
-        case 'daisy':
-            out = genDaisy(n);
-            break;
-        case 'binary':
-            out = genBinary(n);
-            break;
-        case 'graph':
-            const maxEdgesForN = n * (n - 1) / 2;
-            if (isNaN(m) || m < 0 || m > maxEdgesForN) {
-                outputElem.value = `错误: 边数 m 必须是 0 到 ${maxEdgesForN} 之间的整数 (对于 n=${n})。`;
-                return;
-            }
-            out = genGraph(n, m);
-            break;
-        case 'w_tree':
-            if (isNaN(maxw) || maxw < 1 || maxw > 1000) {
-                outputElem.value = '错误: 最大边权必须是 1 到 1000 之间的整数。';
-                return;
-            }
-            out = genWeightTree(n, maxw);
-            break;
-    }
-    outputElem.value = out;
-}
-
-// Function to handle dynamic input enabling/disabling and max 'm' value
-function updateInputs() {
-    const n = parseInt(document.getElementById('n').value);
-    const mInput = document.getElementById('m');
-    const maxwInput = document.getElementById('maxw');
-    const type = document.getElementById('type').value;
-
-    // Reset disabled states
-    mInput.disabled = true;
-    maxwInput.disabled = true;
-
-    // Update max 'm' value dynamically
-    const maxPossibleEdges = n * (n - 1) / 2;
-    mInput.max = Math.min(100000, maxPossibleEdges); // Cap at 100000 or actual max
-    if (parseInt(mInput.value) > mInput.max) {
-        mInput.value = mInput.max; // Adjust value if it exceeds new max
-    }
-
-    switch (type) {
-        case 'graph':
-            mInput.disabled = false;
-            break;
-        case 'w_tree':
-            maxwInput.disabled = false;
-            break;
-    }
-}
-
-// Copy to clipboard function with feedback
-function copyOutput() {
-    const text = document.getElementById('output').value;
-    const feedbackElem = document.getElementById('copyFeedback');
-
-    if (!text.trim()) {
-        feedbackElem.textContent = '没有内容可复制！';
-        feedbackElem.classList.remove('show', 'success');
-        feedbackElem.classList.add('show', 'error');
-        setTimeout(() => feedbackElem.classList.remove('show'), 2000);
-        return;
-    }
-
-    navigator.clipboard.writeText(text).then(() => {
-        feedbackElem.textContent = '复制成功！';
-        feedbackElem.classList.remove('error');
-        feedbackElem.classList.add('show', 'success');
-        setTimeout(() => feedbackElem.classList.remove('show'), 2000);
-    }).catch(err => {
-        console.error('Failed to copy: ', err);
-        feedbackElem.textContent = '复制失败！';
-        feedbackElem.classList.remove('success');
-        feedbackElem.classList.add('show', 'error');
-        setTimeout(() => feedbackElem.classList.remove('show'), 2000);
-    });
-}
-
-// Attach event listeners
-document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('type').addEventListener('change', updateInputs);
-    document.getElementById('n').addEventListener('input', updateInputs); // Update m's max when n changes
-    updateInputs(); // Initial call to set correct states
-    generate(); // Generate initial data on load
-});
-</script>
+<!-- 引入我们自己写的交互逻辑 -->
+<script src="script.js"></script>
 </body>
 </html>
