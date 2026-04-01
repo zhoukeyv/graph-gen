@@ -35,6 +35,7 @@
                     <option value="binary">二叉树</option>
                     <option value="graph">随机无向图</option>
                     <option value="w_tree">带权随机树</option>
+                    <option value="w_graph">带权随机无向图</option>
                 </select>
             </div>
             <div class="button-group">
@@ -57,7 +58,7 @@
             <div class="action-row">
                 <button class="btn-action" onclick="pinAll()" title="固定所有节点">📌 固定</button>
                 <button class="btn-action" onclick="unpinAll()" title="解除所有节点的固定">🔄 解绑</button>
-                <button class="btn-action btn-tree-layout" onclick="formatAsTree()" title="自动排列成树的形状并固定">🌳 树状排版</button>
+                <button class="btn-action btn-tree-layout" onclick="formatAsTree()" title="图论树自动排版(根在上)">🌳 树状排版</button>
             </div>
         </div>
 
@@ -68,12 +69,12 @@
     </div>
 
     <div class="panel right-panel">
-        <div class="graph-hint">Shift+左键: 钉住/解除 | 右键: 颜色与标签</div>
+        <div class="graph-hint">Shift+左键: 固定/解绑 | 右键: 编辑节点与边</div>
         <div id="mynetwork" oncontextmenu="return false;"></div>
     </div>
 </div>
 
-<!-- 右键菜单 -->
+<!-- 节点右键菜单 -->
 <div id="contextMenu" class="context-menu" onclick="event.stopPropagation();" onmousedown="event.stopPropagation();" oncontextmenu="return false;">
     <div class="menu-title">编辑节点</div>
     <div class="menu-item">
@@ -85,7 +86,6 @@
             <label>边框色</label>
             <input type="color" id="nodeColorInput" value="#4e6ef2">
         </div>
-        <!-- 预设边框色卡 -->
         <div class="color-presets">
             <div class="preset-color" style="border-color: #4e6ef2;" onclick="selectColor('#4e6ef2')" title="默认蓝"></div>
             <div class="preset-color" style="border-color: #e63946;" onclick="selectColor('#e63946')" title="赤红"></div>
@@ -98,6 +98,19 @@
     <div class="menu-buttons">
         <button class="btn-cancel" onclick="closeContextMenu()">取消</button>
         <button class="btn-save" onclick="saveNodeConfig()">保存</button>
+    </div>
+</div>
+
+<!-- 边线右键菜单 -->
+<div id="edgeContextMenu" class="context-menu" onclick="event.stopPropagation();" onmousedown="event.stopPropagation();" oncontextmenu="return false;">
+    <div class="menu-title">编辑边权 (数值或字母)</div>
+    <div class="menu-item">
+        <label>权值</label>
+        <input type="text" id="edgeLabelInput" autocomplete="off" onkeydown="if(event.key==='Enter') saveEdgeConfig()">
+    </div>
+    <div class="menu-buttons">
+        <button class="btn-cancel" onclick="closeContextMenu()">清空</button>
+        <button class="btn-save" onclick="saveEdgeConfig()">保存</button>
     </div>
 </div>
 
