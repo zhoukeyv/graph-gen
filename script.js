@@ -1,4 +1,4 @@
-// ==================== 1. 数据生成算法 (保持不变) ====================
+// ==================== 1. 数据生成算法 ====================
 function rand(l, r) { return Math.floor(Math.random() * (r - l + 1)) + l; }
 function insertSorted(arr, val) {
     let low = 0, high = arr.length - 1;
@@ -78,18 +78,17 @@ function initNetwork() {
 
     network = new vis.Network(container, data, options);
 
-    // 单击：仅关闭菜单（保留原生的选中高亮功能）
-    network.on("click", function (params) {
-        closeContextMenu();
-    });
+    // 单击：关闭菜单
+    network.on("click", function () { closeContextMenu(); });
 
-    // 双击：执行固定 / 取消固定
+    // 双击：固定 / 取消固定
     network.on("doubleClick", function (params) {
         if (params.nodes.length > 0) {
             const nodeId = params.nodes[0];
             const node = nodesDataset.get(nodeId);
             if(node) {
                 const isPinned = node.isPinned === true;
+                // 注意：这里只改 border 的颜色，不会覆盖自定义的背景色
                 nodesDataset.update({
                     id: nodeId,
                     isPinned: !isPinned,
@@ -104,7 +103,7 @@ function initNetwork() {
         }
     });
 
-    // 拖拽控制：让固定的节点在拖拽时能动，松开时重新钉死
+    // 拖拽控制
     network.on("dragStart", function(params) {
         closeContextMenu();
         if (params.nodes.length > 0) {
@@ -121,23 +120,29 @@ function initNetwork() {
         }
     });
 
-    // 右键修改菜单：精准定位，防遮挡
+    // 右键修改菜单：支持改名和改色
     network.on("oncontext", function (params) {
         params.event.preventDefault(); 
         const nodeId = network.getNodeAt(params.pointer.DOM);
+        
         if (nodeId !== undefined) {
             contextNodeId = nodeId;
             const node = nodesDataset.get(nodeId);
             const menu = document.getElementById('contextMenu');
-            const input = document.getElementById('nodeLabelInput');
+            const labelInput = document.getElementById('nodeLabelInput');
+            const colorInput = document.getElementById('nodeColorInput');
             
-            // 使用 clientX 结合网页卷动值，保证绝对定位精准！
-            menu.style.left = (params.event.clientX + window.scrollX + 15) + 'px';
+            menu.style.left = (params.event.clientX + window.scrollX + 10) + 'px';
             menu.style.top = (params.event.clientY + window.scrollY + 10) + 'px';
             menu.style.display = 'flex';
             
-            input.value = node.label || String(nodeId);
-            setTimeout(() => { input.focus(); input.select(); }, 50); 
+            // 自动填充当前的标签
+            labelInput.value = node.label || String(nodeId);
+            // 自动填充当前的背景色 (如果有自定义则读取，没有则默认白色)
+            const currentBg = (node.color && node.color.background) ? node.color.background : '#ffffff';
+            colorInput.value = currentBg;
+            
+            setTimeout(() => { labelInput.focus(); labelInput.select(); }, 50); 
         } else {
             closeContextMenu();
         }
@@ -146,7 +151,7 @@ function initNetwork() {
     network.on("zoom", closeContextMenu);
 }
 
-// 文本更新图表（保留颜色和固定状态）
+// 文本更新图表
 window.renderGraphFromText = function() {
     if (!nodesDataset || !edgesDataset) return;
     const text = document.getElementById('output').value.trim();
@@ -158,6 +163,7 @@ window.renderGraphFromText = function() {
     const n = firstLine[0];
     if (isNaN(n) || n > 2000) return; 
 
+    // 核心：保留节点的颜色、固定状态、标签等所有自定义属性
     let newNodes = [];
     for (let i = 1; i <= n; i++) {
         let existingNode = nodesDataset.get(i);
@@ -184,26 +190,31 @@ window.renderGraphFromText = function() {
 
 // ==================== 3. 全局交互响应与面板控制 ====================
 
-// 滑块操作绑定（直接暴露到 window 给 HTML 调用，绝对不会失效）
 window.updateNodeSize = function(val) {
     if(network) { network.setOptions({ nodes: { font: { size: parseInt(val) } } }); }
 }
 window.updateEdgeLength = function(val) {
     if(network) { 
         network.setOptions({ physics: { forceAtlas2Based: { springLength: parseInt(val) } } });
-        network.startSimulation(); // 唤醒物理引擎让弹簧立刻变化
+        network.startSimulation(); 
     }
 }
 
-// 右键菜单关闭与保存逻辑
+// 关闭并保存节点配置 (标签+颜色)
 window.closeContextMenu = function() {
     document.getElementById('contextMenu').style.display = 'none';
     contextNodeId = null;
 }
-window.saveNodeLabel = function() {
+window.saveNodeConfig = function() {
     if (contextNodeId !== null) {
         const newLabel = document.getElementById('nodeLabelInput').value.trim();
-        if (newLabel) { nodesDataset.update({ id: contextNodeId, label: newLabel }); }
+        const newColor = document.getElementById('nodeColorInput').value;
+        
+        nodesDataset.update({ 
+            id: contextNodeId, 
+            label: newLabel || String(contextNodeId),
+            color: { background: newColor }
+        });
         closeContextMenu();
     }
 }
