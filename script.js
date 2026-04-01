@@ -49,6 +49,37 @@ let edgesDataset = null;
 let network = null;
 let contextNodeId = null;
 
+// 核心状态机：安全更新节点属性，防止相互覆盖
+function updateNodeStyle(nodeId, updates) {
+    let node = nodesDataset.get(nodeId);
+    if (!node) return;
+    
+    // 继承或更新状态
+    let isPinned = updates.isPinned !== undefined ? updates.isPinned : (node.isPinned || false);
+    let bgColor = updates.bgColor !== undefined ? updates.bgColor : ((node.color && node.color.background) ? node.color.background : '#ffffff');
+    let label = updates.label !== undefined ? updates.label : node.label;
+    
+    // 固定状态决定边框颜色，但背景色由我们自定义决定
+    let borderColor = isPinned ? '#ff5722' : '#4e6ef2';
+    let hlBorderColor = isPinned ? '#e64a19' : '#3a5cd3';
+    
+    nodesDataset.update({
+        id: nodeId,
+        label: label,
+        isPinned: isPinned,
+        fixed: isPinned,
+        borderWidth: isPinned ? 4 : 2,
+        color: {
+            background: bgColor,
+            border: borderColor,
+            highlight: {
+                background: bgColor, // 保证鼠标悬停时背景色不丢失
+                border: hlBorderColor
+            }
+        }
+    });
+}
+
 function initNetwork() {
     nodesDataset = new vis.DataSet();
     edgesDataset = new vis.DataSet();
@@ -61,7 +92,7 @@ function initNetwork() {
     const options = {
         nodes: {
             shape: 'circle',
-            color: { background: '#ffffff', border: '#4e6ef2', highlight: { background: '#f0f4ff', border: '#3a5cd3' } },
+            color: { background: '#ffffff', border: '#4e6ef2', highlight: { background: '#ffffff', border: '#3a5cd3' } },
             borderWidth: 2, font: { color: '#333', size: initNodeSize, face: 'system-ui' }, shadow: true
         },
         edges: {
@@ -78,28 +109,15 @@ function initNetwork() {
 
     network = new vis.Network(container, data, options);
 
-    // 单击：关闭菜单
+    // 单击关闭菜单
     network.on("click", function () { closeContextMenu(); });
 
-    // 双击：固定 / 取消固定
+    // 双击触发固定/解绑
     network.on("doubleClick", function (params) {
         if (params.nodes.length > 0) {
             const nodeId = params.nodes[0];
             const node = nodesDataset.get(nodeId);
-            if(node) {
-                const isPinned = node.isPinned === true;
-                // 注意：这里只改 border 的颜色，不会覆盖自定义的背景色
-                nodesDataset.update({
-                    id: nodeId,
-                    isPinned: !isPinned,
-                    fixed: !isPinned, 
-                    borderWidth: !isPinned ? 4 : 2,
-                    color: { 
-                        border: !isPinned ? '#ff5722' : '#4e6ef2', 
-                        highlight: { border: !isPinned ? '#e64a19' : '#3a5cd3' }
-                    }
-                });
-            }
+            updateNodeStyle(nodeId, { isPinned: !node.isPinned });
         }
     });
 
@@ -120,7 +138,7 @@ function initNetwork() {
         }
     });
 
-    // 右键修改菜单：支持改名和改色
+    // 右键修改菜单
     network.on("oncontext", function (params) {
         params.event.preventDefault(); 
         const nodeId = network.getNodeAt(params.pointer.DOM);
@@ -136,9 +154,7 @@ function initNetwork() {
             menu.style.top = (params.event.clientY + window.scrollY + 10) + 'px';
             menu.style.display = 'flex';
             
-            // 自动填充当前的标签
             labelInput.value = node.label || String(nodeId);
-            // 自动填充当前的背景色 (如果有自定义则读取，没有则默认白色)
             const currentBg = (node.color && node.color.background) ? node.color.background : '#ffffff';
             colorInput.value = currentBg;
             
@@ -151,7 +167,6 @@ function initNetwork() {
     network.on("zoom", closeContextMenu);
 }
 
-// 文本更新图表
 window.renderGraphFromText = function() {
     if (!nodesDataset || !edgesDataset) return;
     const text = document.getElementById('output').value.trim();
@@ -163,7 +178,7 @@ window.renderGraphFromText = function() {
     const n = firstLine[0];
     if (isNaN(n) || n > 2000) return; 
 
-    // 核心：保留节点的颜色、固定状态、标签等所有自定义属性
+    // 保留现有节点及其完整外观状态
     let newNodes = [];
     for (let i = 1; i <= n; i++) {
         let existingNode = nodesDataset.get(i);
@@ -200,20 +215,22 @@ window.updateEdgeLength = function(val) {
     }
 }
 
-// 关闭并保存节点配置 (标签+颜色)
 window.closeContextMenu = function() {
     document.getElementById('contextMenu').style.display = 'none';
     contextNodeId = null;
 }
+
+// 快速设色
+window.selectColor = function(hexStr) {
+    document.getElementById('nodeColorInput').value = hexStr;
+}
+
+// 安全保存并触发状态机
 window.saveNodeConfig = function() {
     if (contextNodeId !== null) {
-        const newLabel = document.getElementById('nodeLabelInput').value.trim();
-        const newColor = document.getElementById('nodeColorInput').value;
-        
-        nodesDataset.update({ 
-            id: contextNodeId, 
-            label: newLabel || String(contextNodeId),
-            color: { background: newColor }
+        updateNodeStyle(contextNodeId, {
+            label: document.getElementById('nodeLabelInput').value.trim() || String(contextNodeId),
+            bgColor: document.getElementById('nodeColorInput').value
         });
         closeContextMenu();
     }
