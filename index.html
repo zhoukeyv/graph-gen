@@ -4,15 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>图论数据生成器 & 实时预览</title>
-    <!-- 引入外部的CSS样式文件 -->
     <link rel="stylesheet" href="style.css">
-    <!-- 引入 vis-network 图形库 -->
+    <!-- 使用国内加速稳定的 CDN -->
     <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/standalone/umd/vis-network.min.js"></script>
 </head>
 <body>
 
 <div class="container">
-    <!-- 左侧控制面板与数据区 -->
     <div class="panel left-panel">
         <h1>图论数据生成器</h1>
         
@@ -37,7 +35,7 @@
                     <option value="daisy">菊花图</option>
                     <option value="binary">二叉树</option>
                     <option value="graph">随机无向图</option>
-                    <option value="w_tree">带权随机树 (Prüfer序列)</option>
+                    <option value="w_tree">带权随机树</option>
                 </select>
             </div>
             <div class="button-group">
@@ -47,19 +45,37 @@
             </div>
         </div>
 
+        <!-- 新增：可视化调节面板 -->
+        <div class="visual-controls">
+            <div class="visual-title">🎨 图形显示调节</div>
+            <div class="slider-row">
+                <label>节点大小:</label>
+                <input type="range" id="nodeSize" min="10" max="40" value="16">
+            </div>
+            <div class="slider-row">
+                <label>边长(弹簧):</label>
+                <input type="range" id="edgeLength" min="30" max="300" value="100">
+            </div>
+        </div>
+
         <div class="textarea-container">
-            <p class="hint">你可以直接在此处修改数据，右侧图形会实时同步更新：</p>
+            <p class="hint">直接在此修改数据，右侧图形会实时同步更新：</p>
             <textarea id="output" spellcheck="false"></textarea>
         </div>
     </div>
 
-    <!-- 右侧图形预览区 -->
     <div class="panel right-panel">
         <div id="mynetwork"></div>
     </div>
 </div>
 
-<!-- 引入我们自己写的交互逻辑 -->
+<!-- 新增：自定义悬浮右键菜单 -->
+<div id="contextMenu" class="context-menu">
+    <div class="menu-title">修改节点标签</div>
+    <input type="text" id="nodeLabelInput" autocomplete="off">
+    <button id="saveLabelBtn">保存 (Enter)</button>
+</div>
+
 <script src="script.js"></script>
 </body>
 </html>
