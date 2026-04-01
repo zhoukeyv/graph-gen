@@ -49,34 +49,30 @@ let edgesDataset = null;
 let network = null;
 let contextNodeId = null;
 
-// 高级状态机：生成节点更新对象（处理 📌 图标、颜色和固定状态）
+// 高级状态机
 function getStyleObject(node, updates) {
     node = node || {};
     let isPinned = updates.isPinned !== undefined ? updates.isPinned : (node.isPinned || false);
     let customBorder = updates.customColor !== undefined ? updates.customColor : (node.customColor || '#4e6ef2');
     
-    // 我们将原标签与图标剥离，baseLabel 用于存储真实的节点文字
     let baseLabel = updates.label !== undefined ? updates.label : (node.baseLabel !== undefined ? node.baseLabel : (node.label || ''));
-    if (typeof baseLabel === 'string') {
-        baseLabel = baseLabel.replace(/\s*📌$/, ''); // 清理残留的图标
-    }
+    if (typeof baseLabel === 'string') { baseLabel = baseLabel.replace(/\s*📌$/, ''); }
 
     return {
         id: node.id || updates.id,
         baseLabel: baseLabel,
-        // 如果节点被固定，我们在显示时给他加一个明显的 📌
         label: isPinned ? (baseLabel ? baseLabel + ' 📌' : '📌') : baseLabel,
         isPinned: isPinned,
         customColor: customBorder,
         fixed: isPinned,
         borderWidth: isPinned ? 4 : 2,
+        borderWidthSelected: isPinned ? 4 : 2, // 【关键修复】被选中时，边框粗细与未选中时保持绝对一致，禁止变粗！
         color: {
-            // 被固定的节点会有淡灰色的背景，进一步增强辨识度
             background: isPinned ? '#f3f4f6' : '#ffffff',
             border: customBorder,
             highlight: {
                 background: isPinned ? '#e5e7eb' : '#f0f4ff',
-                border: customBorder
+                border: customBorder // 选中时依然保持颜色不变
             }
         },
         shadow: isPinned ? { enabled: true, color: 'rgba(0,0,0,0.3)', size: 8, x: 2, y: 2 } : true
@@ -102,8 +98,11 @@ function initNetwork() {
         nodes: {
             shape: 'circle',
             mass: 2.5,
+            borderWidth: 2,
+            borderWidthSelected: 2, // 【关键修复】全局默认禁止变粗
             color: { background: '#ffffff', border: '#4e6ef2', highlight: { background: '#f0f4ff', border: '#3a5cd3' } },
-            borderWidth: 2, font: { color: '#333', size: initNodeSize, face: 'system-ui' }, shadow: true
+            font: { color: '#333', size: initNodeSize, face: 'system-ui' }, 
+            shadow: true
         },
         edges: {
             color: { color: '#999', highlight: '#4e6ef2' },
@@ -119,7 +118,6 @@ function initNetwork() {
 
     network = new vis.Network(container, data, options);
 
-    // 单击处理：包含 Shift+单击 (固定/解绑) 和 普通单击 (关闭菜单)
     network.on("click", function (params) {
         if (params.event.srcEvent.shiftKey && params.nodes.length > 0) {
             const nodeId = params.nodes[0];
@@ -131,7 +129,6 @@ function initNetwork() {
         closeContextMenu();
     });
 
-    // 拖拽控制：拖拽时暂时解除固定以允许移动，松开时恢复原状
     network.on("dragStart", function(params) {
         closeContextMenu();
         if (params.nodes.length > 0) {
@@ -148,7 +145,6 @@ function initNetwork() {
         }
     });
 
-    // 右键菜单
     network.on("oncontext", function (params) {
         params.event.preventDefault(); 
         const nodeId = network.getNodeAt(params.pointer.DOM);
@@ -164,7 +160,6 @@ function initNetwork() {
             menu.style.top = (params.event.clientY + window.scrollY + 10) + 'px';
             menu.style.display = 'flex';
             
-            // 文本框里绝对不显示 📌 图标，只显示原名
             let pureLabel = node.baseLabel !== undefined ? node.baseLabel : (node.label || String(nodeId));
             if (typeof pureLabel === 'string') pureLabel = pureLabel.replace(/\s*📌$/, '');
             labelInput.value = pureLabel;
@@ -191,14 +186,12 @@ window.renderGraphFromText = function() {
     const n = firstLine[0];
     if (isNaN(n) || n > 2000) return; 
 
-    // 保留现有节点及其完整外观状态
     let newNodes = [];
     for (let i = 1; i <= n; i++) {
         let existingNode = nodesDataset.get(i);
         if (existingNode) { 
             newNodes.push(existingNode); 
         } else { 
-            // 新节点默认按照状态机初始化
             newNodes.push(getStyleObject({ id: i }, { label: String(i) })); 
         }
     }
@@ -232,17 +225,61 @@ window.updateEdgeLength = function(val) {
     }
 }
 
-// 一键全部操作
+// 【修复】一键全部操作，必须通过 nodesDataset.get() 转为纯数组再 map
 window.pinAll = function() {
     if(!nodesDataset) return;
-    let updates = nodesDataset.map(node => getStyleObject(node, { isPinned: true }));
+    let updates = nodesDataset.get().map(node => getStyleObject(node, { isPinned: true }));
     nodesDataset.update(updates);
 }
 
 window.unpinAll = function() {
     if(!nodesDataset) return;
-    let updates = nodesDataset.map(node => getStyleObject(node, { isPinned: false }));
+    let updates = nodesDataset.get().map(node => getStyleObject(node, { isPinned: false }));
     nodesDataset.update(updates);
+}
+
+// 【新增】树状自动排版引擎
+window.formatAsTree = function() {
+    if (!network || !nodesDataset) return;
+    
+    // 1. 临时开启层级结构引擎，关闭物理引擎以强制排版
+    network.setOptions({
+        layout: {
+            hierarchical: {
+                enabled: true,
+                direction: 'UD',       // Up-Down 纵向树
+                sortMethod: 'directed',// 按照图连接寻找层级
+                nodeSpacing: 100,
+                levelSeparation: 100
+            }
+        },
+        physics: { enabled: false }
+    });
+
+    // 2. 给予引擎 50ms 的时间瞬间计算坐标
+    setTimeout(() => {
+        let positions = network.getPositions();
+        
+        // 3. 恢复标准布局引擎
+        network.setOptions({
+            layout: { hierarchical: { enabled: false } },
+            physics: { enabled: true }
+        });
+
+        // 4. 将所有节点赋予算出的树坐标，并强制固定（📌）
+        let updates = nodesDataset.get().map(node => {
+            let style = getStyleObject(node, { isPinned: true });
+            if (positions[node.id]) {
+                style.x = positions[node.id].x;
+                style.y = positions[node.id].y;
+            }
+            return style;
+        });
+        nodesDataset.update(updates);
+        
+        // 5. 视角平滑居中适应
+        network.fit({ animation: { duration: 600, easingFunction: "easeInOutQuad" } });
+    }, 50);
 }
 
 window.closeContextMenu = function() {
