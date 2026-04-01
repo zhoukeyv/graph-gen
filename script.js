@@ -55,7 +55,9 @@ function getStyleObject(node, updates) {
     let label = updates.label !== undefined ? updates.label : (node.label || '');
 
     return {
-        id: node.id || updates.id, label: label, isPinned: isPinned, customColor: customBorder, fixed: isPinned,
+        id: node.id || updates.id, label: label, isPinned: isPinned, customColor: customBorder, 
+        // 【底层强加固】强制使用对象形式，确保 vis.js 绝对能理解物理坐标的冻结与释放
+        fixed: isPinned ? { x: true, y: true } : { x: false, y: false },
         borderWidth: isPinned ? 4 : 2, borderWidthSelected: isPinned ? 4 : 2,
         color: { background: isPinned ? '#f3f4f6' : '#ffffff', border: customBorder, highlight: { background: isPinned ? '#e5e7eb' : '#f0f4ff', border: customBorder } },
         shadow: isPinned ? { enabled: true, color: 'rgba(0,0,0,0.3)', size: 8, x: 2, y: 2 } : true
@@ -89,7 +91,7 @@ function initNetwork() {
     network.on("click", function (params) {
         if (params.event.srcEvent.shiftKey && params.nodes.length > 0) {
             updateNodeStyle(params.nodes[0], { isPinned: !nodesDataset.get(params.nodes[0]).isPinned });
-            // 【关键修复】单节点状态切换（尤其解绑）后，立刻踢醒休眠的物理引擎
+            // 单节点状态切换（尤其解绑）后，立刻踢醒休眠的物理引擎
             if (network) network.startSimulation(); 
             closeContextMenu(); return;
         }
@@ -100,13 +102,13 @@ function initNetwork() {
         closeContextMenu();
         if (params.nodes.length > 0) {
             const node = nodesDataset.get(params.nodes[0]);
-            if (node && node.isPinned) nodesDataset.update({ id: node.id, fixed: false });
+            if (node && node.isPinned) nodesDataset.update({ id: node.id, fixed: { x: false, y: false } });
         }
     });
     network.on("dragEnd", function(params) {
         if (params.nodes.length > 0) {
             const node = nodesDataset.get(params.nodes[0]);
-            if (node && node.isPinned) nodesDataset.update({ id: node.id, fixed: true });
+            if (node && node.isPinned) nodesDataset.update({ id: node.id, fixed: { x: true, y: true } });
         }
     });
 
@@ -182,19 +184,15 @@ window.renderGraphFromText = function() {
     edgesDataset.clear();
     edgesDataset.add(newEdges);
 
-    // 【关键修复】强制唤醒物理引擎！防止树形结构等低密度图因为坐标不变导致假死休眠。
     setTimeout(() => { if (network) network.startSimulation(); }, 10);
 }
 
 // ==================== 4. 快捷键与面板控制 ====================
 
-// 快捷键: Alt + K + 字母 (变色/恢复)
 let activeKeys = {};
 document.addEventListener('keydown', e => {
-    // 屏蔽在输入框里的误触
     if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
 
-    // 【关键修复1】使用 e.code 读取物理按键，防止 Alt 键导致 e.key 变成特殊字符（如 ® 或 ˚）
     activeKeys[e.code] = true;
 
     if (e.altKey && activeKeys['KeyK']) {
@@ -207,12 +205,11 @@ document.addEventListener('keydown', e => {
         else if (e.code === 'KeyD') color = '#333333';
 
         if (color && network) {
-            e.preventDefault(); // 阻止浏览器默认行为
+            e.preventDefault(); 
             let selectedNodes = network.getSelectedNodes();
             if (selectedNodes.length > 0) {
                 let updates = selectedNodes.map(id => {
                     let node = nodesDataset.get(id);
-                    // 【关键修复2】获取当前颜色，若无则默认为蓝，保证 Toggle 逻辑闭环
                     let currentColor = node.customColor || '#4e6ef2';
                     let newColor = (currentColor === color) ? '#4e6ef2' : color;
                     return getStyleObject(node, { customColor: newColor });
@@ -235,11 +232,10 @@ window.pinAll = function() { if(!nodesDataset) return; nodesDataset.update(nodes
 window.unpinAll = function() { 
     if(!nodesDataset) return; 
     nodesDataset.update(nodesDataset.get().map(node => getStyleObject(node, { isPinned: false }))); 
-    // 【关键修复3】全部解绑后，必须唤醒休眠的引擎
     if (network) network.startSimulation(); 
 }
 
-// 树形排版，并彻底修复解除后的假死
+// 树形排版，并彻底修复解除后的假死与麻花边线
 window.formatAsTree = function() {
     if (!network || !nodesDataset) return;
     const currentEdgeLen = parseInt(document.getElementById('edgeLength').value) || 100;
@@ -251,10 +247,23 @@ window.formatAsTree = function() {
 
     setTimeout(() => {
         let positions = network.getPositions();
-        // 【关键修复4】必须使用 { enabled: false } 干净地关闭层级布局，否则 vis 底层会残留状态导致物理引擎挂掉
+        
+        // 【核心大修复】不仅要关闭层级，还要强行恢复边线的平滑类型（解开麻花），并强行把所有物理参数满血复活！
         network.setOptions({
             layout: { hierarchical: { enabled: false } },
-            physics: { enabled: true, solver: 'forceAtlas2Based' }
+            edges: { smooth: { type: 'continuous' } }, // 彻底修复图里的边线扭曲
+            physics: { 
+                enabled: true, 
+                solver: 'forceAtlas2Based',
+                forceAtlas2Based: { 
+                    gravitationalConstant: -50, 
+                    centralGravity: 0.01, 
+                    springConstant: 0.06, 
+                    springLength: currentEdgeLen, 
+                    damping: 0.75, 
+                    avoidOverlap: 0.5 
+                }
+            } // 重置物理记忆
         });
 
         let updates = nodesDataset.get().map(node => {
@@ -265,7 +274,6 @@ window.formatAsTree = function() {
         nodesDataset.update(updates);
         network.fit({ animation: { duration: 600, easingFunction: "easeInOutQuad" } });
         
-        // 【关键修复5】确保重置后物理引擎被踢醒
         network.startSimulation();
     }, 50);
 }
