@@ -89,6 +89,8 @@ function initNetwork() {
     network.on("click", function (params) {
         if (params.event.srcEvent.shiftKey && params.nodes.length > 0) {
             updateNodeStyle(params.nodes[0], { isPinned: !nodesDataset.get(params.nodes[0]).isPinned });
+            // 【关键修复】单节点状态切换（尤其解绑）后，立刻踢醒休眠的物理引擎
+            if (network) network.startSimulation(); 
             closeContextMenu(); return;
         }
         closeContextMenu();
@@ -192,27 +194,27 @@ document.addEventListener('keydown', e => {
     // 屏蔽在输入框里的误触
     if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
 
-    activeKeys[e.key.toLowerCase()] = true;
-    activeKeys['alt'] = e.altKey;
+    // 【关键修复1】使用 e.code 读取物理按键，防止 Alt 键导致 e.key 变成特殊字符（如 ® 或 ˚）
+    activeKeys[e.code] = true;
 
-    if (activeKeys['alt'] && activeKeys['k']) {
+    if (e.altKey && activeKeys['KeyK']) {
         let color = null;
-        const key = e.key.toLowerCase();
-        if (key === 'r') color = '#e63946';
-        else if (key === 'b') color = '#4e6ef2';
-        else if (key === 'g') color = '#2a9d8f';
-        else if (key === 'y') color = '#f4a261';
-        else if (key === 'p') color = '#9d4edd';
-        else if (key === 'd') color = '#333333';
+        if (e.code === 'KeyR') color = '#e63946';
+        else if (e.code === 'KeyB') color = '#4e6ef2';
+        else if (e.code === 'KeyG') color = '#2a9d8f';
+        else if (e.code === 'KeyY') color = '#f4a261';
+        else if (e.code === 'KeyP') color = '#9d4edd';
+        else if (e.code === 'KeyD') color = '#333333';
 
         if (color && network) {
-            e.preventDefault();
+            e.preventDefault(); // 阻止浏览器默认行为
             let selectedNodes = network.getSelectedNodes();
             if (selectedNodes.length > 0) {
                 let updates = selectedNodes.map(id => {
                     let node = nodesDataset.get(id);
-                    // 【智能切换逻辑】如果是该色则恢复默认蓝，否则变目标色
-                    let newColor = (node.customColor === color) ? '#4e6ef2' : color;
+                    // 【关键修复2】获取当前颜色，若无则默认为蓝，保证 Toggle 逻辑闭环
+                    let currentColor = node.customColor || '#4e6ef2';
+                    let newColor = (currentColor === color) ? '#4e6ef2' : color;
                     return getStyleObject(node, { customColor: newColor });
                 });
                 nodesDataset.update(updates);
@@ -222,15 +224,20 @@ document.addEventListener('keydown', e => {
 });
 
 document.addEventListener('keyup', e => {
-    activeKeys[e.key.toLowerCase()] = false;
-    activeKeys['alt'] = e.altKey;
+    activeKeys[e.code] = false;
 });
 window.addEventListener('blur', () => { activeKeys = {}; });
 
 window.updateNodeSize = function(val) { if(network) { network.setOptions({ nodes: { font: { size: parseInt(val) } } }); } }
 window.updateEdgeLength = function(val) { if(network) { network.setOptions({ physics: { forceAtlas2Based: { springLength: parseInt(val) } } }); network.startSimulation(); } }
 window.pinAll = function() { if(!nodesDataset) return; nodesDataset.update(nodesDataset.get().map(node => getStyleObject(node, { isPinned: true }))); }
-window.unpinAll = function() { if(!nodesDataset) return; nodesDataset.update(nodesDataset.get().map(node => getStyleObject(node, { isPinned: false }))); }
+
+window.unpinAll = function() { 
+    if(!nodesDataset) return; 
+    nodesDataset.update(nodesDataset.get().map(node => getStyleObject(node, { isPinned: false }))); 
+    // 【关键修复3】全部解绑后，必须唤醒休眠的引擎
+    if (network) network.startSimulation(); 
+}
 
 // 树形排版，并彻底修复解除后的假死
 window.formatAsTree = function() {
@@ -244,9 +251,9 @@ window.formatAsTree = function() {
 
     setTimeout(() => {
         let positions = network.getPositions();
-        // 彻底关闭层级布局，重置为力导向物理引擎
+        // 【关键修复4】必须使用 { enabled: false } 干净地关闭层级布局，否则 vis 底层会残留状态导致物理引擎挂掉
         network.setOptions({
-            layout: { hierarchical: false },
+            layout: { hierarchical: { enabled: false } },
             physics: { enabled: true, solver: 'forceAtlas2Based' }
         });
 
@@ -257,6 +264,9 @@ window.formatAsTree = function() {
         });
         nodesDataset.update(updates);
         network.fit({ animation: { duration: 600, easingFunction: "easeInOutQuad" } });
+        
+        // 【关键修复5】确保重置后物理引擎被踢醒
+        network.startSimulation();
     }, 50);
 }
 
