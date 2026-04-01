@@ -55,8 +55,9 @@
                 <input type="range" id="edgeLength" min="30" max="300" value="100" oninput="updateEdgeLength(this.value)">
             </div>
             <div class="action-row">
-                <button class="btn-action" onclick="pinAll()">📌 全部固定</button>
-                <button class="btn-action" onclick="unpinAll()">🔄 全部解绑</button>
+                <button class="btn-action" onclick="pinAll()" title="固定所有节点">📌 固定</button>
+                <button class="btn-action" onclick="unpinAll()" title="解除所有节点的固定">🔄 解绑</button>
+                <button class="btn-action btn-tree-layout" onclick="formatAsTree()" title="自动排列成树的形状并固定">🌳 树状排版</button>
             </div>
         </div>
 
@@ -84,7 +85,7 @@
             <label>边框色</label>
             <input type="color" id="nodeColorInput" value="#4e6ef2">
         </div>
-        <!-- 预设边框色卡 (高对比度) -->
+        <!-- 预设边框色卡 -->
         <div class="color-presets">
             <div class="preset-color" style="border-color: #4e6ef2;" onclick="selectColor('#4e6ef2')" title="默认蓝"></div>
             <div class="preset-color" style="border-color: #e63946;" onclick="selectColor('#e63946')" title="赤红"></div>
