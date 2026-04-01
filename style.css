@@ -38,9 +38,12 @@ button:hover { background: var(--primary-hover); }
 .visual-controls { margin-top: 20px; padding: 15px; background: #f9fafb; border-radius: 6px; border: 1px solid var(--border); }
 .visual-title { font-size: 13px; font-weight: 600; color: var(--text-main); margin-bottom: 12px; }
 .slider-row { display: flex; align-items: center; margin-bottom: 10px; }
-.slider-row:last-child { margin-bottom: 0; }
 .slider-row label { width: 90px; font-size: 13px; color: var(--text-light); }
 .slider-row input[type="range"] { flex: 1; cursor: pointer; accent-color: var(--primary); }
+
+.action-row { display: flex; gap: 8px; margin-top: 15px; }
+.btn-action { flex: 1; padding: 8px; font-size: 13px; background: #ffffff; color: #4b5563; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; transition: 0.2s; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+.btn-action:hover { background: #f3f4f6; border-color: #9ca3af; color: #111827; }
 
 .textarea-container { margin-top: 20px; flex: 1; display: flex; flex-direction: column; }
 .hint { font-size: 13px; font-weight: 600; color: var(--text-main); margin-bottom: 8px; }
