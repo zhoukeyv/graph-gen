@@ -49,33 +49,44 @@ let edgesDataset = null;
 let network = null;
 let contextNodeId = null;
 
-// 核心状态机：确保边框变色和固定状态互不干扰
-function updateNodeStyle(nodeId, updates) {
-    let node = nodesDataset.get(nodeId);
-    if (!node) return;
-    
+// 高级状态机：生成节点更新对象（处理 📌 图标、颜色和固定状态）
+function getStyleObject(node, updates) {
+    node = node || {};
     let isPinned = updates.isPinned !== undefined ? updates.isPinned : (node.isPinned || false);
-    // 颜色现在专门用于修改 border
     let customBorder = updates.customColor !== undefined ? updates.customColor : (node.customColor || '#4e6ef2');
-    let label = updates.label !== undefined ? updates.label : node.label;
     
-    nodesDataset.update({
-        id: nodeId,
-        label: label,
+    // 我们将原标签与图标剥离，baseLabel 用于存储真实的节点文字
+    let baseLabel = updates.label !== undefined ? updates.label : (node.baseLabel !== undefined ? node.baseLabel : (node.label || ''));
+    if (typeof baseLabel === 'string') {
+        baseLabel = baseLabel.replace(/\s*📌$/, ''); // 清理残留的图标
+    }
+
+    return {
+        id: node.id || updates.id,
+        baseLabel: baseLabel,
+        // 如果节点被固定，我们在显示时给他加一个明显的 📌
+        label: isPinned ? (baseLabel ? baseLabel + ' 📌' : '📌') : baseLabel,
         isPinned: isPinned,
-        customColor: customBorder, // 缓存用户设置的颜色
+        customColor: customBorder,
         fixed: isPinned,
-        borderWidth: isPinned ? 5 : 2, // 固定的节点边框明显加粗
+        borderWidth: isPinned ? 4 : 2,
         color: {
-            background: '#ffffff', // 永远保持背景清爽
+            // 被固定的节点会有淡灰色的背景，进一步增强辨识度
+            background: isPinned ? '#f3f4f6' : '#ffffff',
             border: customBorder,
             highlight: {
-                background: '#f0f4ff',
+                background: isPinned ? '#e5e7eb' : '#f0f4ff',
                 border: customBorder
             }
         },
-        shadow: isPinned ? { enabled: true, color: 'rgba(0,0,0,0.3)', size: 10, x: 2, y: 2 } : true
-    });
+        shadow: isPinned ? { enabled: true, color: 'rgba(0,0,0,0.3)', size: 8, x: 2, y: 2 } : true
+    };
+}
+
+function updateNodeStyle(nodeId, updates) {
+    let node = nodesDataset.get(nodeId);
+    if (!node) return;
+    nodesDataset.update(getStyleObject(node, updates));
 }
 
 function initNetwork() {
@@ -90,7 +101,7 @@ function initNetwork() {
     const options = {
         nodes: {
             shape: 'circle',
-            mass: 2.5, // 【关键优化】增加节点质量，拖拽时有沉稳感
+            mass: 2.5,
             color: { background: '#ffffff', border: '#4e6ef2', highlight: { background: '#f0f4ff', border: '#3a5cd3' } },
             borderWidth: 2, font: { color: '#333', size: initNodeSize, face: 'system-ui' }, shadow: true
         },
@@ -100,14 +111,7 @@ function initNetwork() {
         },
         physics: {
             enabled: true, solver: 'forceAtlas2Based',
-            forceAtlas2Based: { 
-                gravitationalConstant: -50, 
-                centralGravity: 0.01, 
-                springConstant: 0.06, 
-                springLength: initEdgeLength, 
-                damping: 0.75, // 【关键优化】增加环境摩擦力，松手后迅速停稳，不再乱飞
-                avoidOverlap: 0.5 
-            },
+            forceAtlas2Based: { gravitationalConstant: -50, centralGravity: 0.01, springConstant: 0.06, springLength: initEdgeLength, damping: 0.75, avoidOverlap: 0.5 },
             stabilization: { iterations: 150 } 
         },
         interaction: { hover: true, tooltipDelay: 200 }
@@ -127,7 +131,7 @@ function initNetwork() {
         closeContextMenu();
     });
 
-    // 拖拽控制：拖拽时暂时解除固定，松开时恢复
+    // 拖拽控制：拖拽时暂时解除固定以允许移动，松开时恢复原状
     network.on("dragStart", function(params) {
         closeContextMenu();
         if (params.nodes.length > 0) {
@@ -144,7 +148,7 @@ function initNetwork() {
         }
     });
 
-    // 右键菜单绑定
+    // 右键菜单
     network.on("oncontext", function (params) {
         params.event.preventDefault(); 
         const nodeId = network.getNodeAt(params.pointer.DOM);
@@ -160,10 +164,12 @@ function initNetwork() {
             menu.style.top = (params.event.clientY + window.scrollY + 10) + 'px';
             menu.style.display = 'flex';
             
-            labelInput.value = node.label || String(nodeId);
-            // 读取用户缓存的自定义颜色，如果没有则用默认蓝
-            colorInput.value = node.customColor || '#4e6ef2';
+            // 文本框里绝对不显示 📌 图标，只显示原名
+            let pureLabel = node.baseLabel !== undefined ? node.baseLabel : (node.label || String(nodeId));
+            if (typeof pureLabel === 'string') pureLabel = pureLabel.replace(/\s*📌$/, '');
+            labelInput.value = pureLabel;
             
+            colorInput.value = node.customColor || '#4e6ef2';
             setTimeout(() => { labelInput.focus(); labelInput.select(); }, 50); 
         } else {
             closeContextMenu();
@@ -189,8 +195,12 @@ window.renderGraphFromText = function() {
     let newNodes = [];
     for (let i = 1; i <= n; i++) {
         let existingNode = nodesDataset.get(i);
-        if (existingNode) { newNodes.push(existingNode); } 
-        else { newNodes.push({ id: i, label: String(i) }); }
+        if (existingNode) { 
+            newNodes.push(existingNode); 
+        } else { 
+            // 新节点默认按照状态机初始化
+            newNodes.push(getStyleObject({ id: i }, { label: String(i) })); 
+        }
     }
     const currentNodesIds = nodesDataset.getIds();
     const nodesToRemove = currentNodesIds.filter(id => id > n);
@@ -222,18 +232,29 @@ window.updateEdgeLength = function(val) {
     }
 }
 
+// 一键全部操作
+window.pinAll = function() {
+    if(!nodesDataset) return;
+    let updates = nodesDataset.map(node => getStyleObject(node, { isPinned: true }));
+    nodesDataset.update(updates);
+}
+
+window.unpinAll = function() {
+    if(!nodesDataset) return;
+    let updates = nodesDataset.map(node => getStyleObject(node, { isPinned: false }));
+    nodesDataset.update(updates);
+}
+
 window.closeContextMenu = function() {
     document.getElementById('contextMenu').style.display = 'none';
     contextNodeId = null;
 }
 
-// 快速设色（点击色卡瞬间生效并关闭菜单）
 window.selectColor = function(hexStr) {
     document.getElementById('nodeColorInput').value = hexStr;
     saveNodeConfig();
 }
 
-// 保存面板输入
 window.saveNodeConfig = function() {
     if (contextNodeId !== null) {
         updateNodeStyle(contextNodeId, {
