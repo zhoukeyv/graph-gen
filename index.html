@@ -45,7 +45,7 @@
         </div>
 
         <div class="visual-controls">
-            <div class="visual-title">外观设置</div>
+            <div class="visual-title">布局与设置</div>
             <div class="slider-row">
                 <label>节点大小:</label>
                 <input type="range" id="nodeSize" min="10" max="40" value="16" oninput="updateNodeSize(this.value)">
@@ -53,6 +53,10 @@
             <div class="slider-row">
                 <label>弹簧边长:</label>
                 <input type="range" id="edgeLength" min="30" max="300" value="100" oninput="updateEdgeLength(this.value)">
+            </div>
+            <div class="action-row">
+                <button class="btn-action" onclick="pinAll()">📌 全部固定</button>
+                <button class="btn-action" onclick="unpinAll()">🔄 全部解绑</button>
             </div>
         </div>
 
@@ -63,7 +67,7 @@
     </div>
 
     <div class="panel right-panel">
-        <div class="graph-hint">Shift+左键: 固定/取消 | 右键: 编辑节点</div>
+        <div class="graph-hint">Shift+左键: 钉住/解除 | 右键: 颜色与标签</div>
         <div id="mynetwork" oncontextmenu="return false;"></div>
     </div>
 </div>
