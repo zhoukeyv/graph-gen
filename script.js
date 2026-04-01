@@ -91,7 +91,6 @@ function genWeightTree(n, maxw) {
 
 // ==================== 2. Vis-network 图形渲染控制 ====================
 
-// 创建 DataSet 用于管理节点和边，这样可以实现平滑的数据更新
 let nodesDataset = new vis.DataSet();
 let edgesDataset = new vis.DataSet();
 let network = null;
@@ -101,7 +100,6 @@ function initNetwork() {
     const container = document.getElementById('mynetwork');
     const data = { nodes: nodesDataset, edges: edgesDataset };
     
-    // Vis.js 的配置项，可以调整颜色、物理引擎等
     const options = {
         nodes: {
             shape: 'circle',
@@ -117,21 +115,74 @@ function initNetwork() {
         edges: {
             color: { color: '#999', highlight: '#4e6ef2' },
             width: 2,
-            font: { size: 14, align: 'top', background: '#ffffff' }, // 边权标签设置
-            smooth: { type: 'continuous' } // 让边看起来更平滑
+            font: { size: 14, align: 'top', background: '#ffffff' }, 
+            smooth: { type: 'continuous' } 
         },
         physics: {
             enabled: true,
-            barnesHut: { gravitationalConstant: -2000, springLength: 100, springConstant: 0.04 },
-            stabilization: { iterations: 100 } // 生成后快速稳定下来
+            solver: 'forceAtlas2Based', // 解决问题1：更换为防抖动更好的求解器
+            forceAtlas2Based: {
+                gravitationalConstant: -50,
+                centralGravity: 0.01,
+                springConstant: 0.08,
+                springLength: 100,
+                damping: 0.4, // 解决问题1：增加阻尼，让拖拽后迅速稳定，不再鬼畜
+                avoidOverlap: 0
+            },
+            stabilization: { iterations: 150 } 
         },
         interaction: { hover: true, tooltipDelay: 200 }
     };
 
     network = new vis.Network(container, data, options);
+
+    // ================= 高级交互事件绑定 =================
+
+    // 解决问题2：单击固定/取消固定节点
+    network.on("click", function (params) {
+        if (params.nodes.length > 0) {
+            const nodeId = params.nodes[0];
+            const node = nodesDataset.get(nodeId);
+            
+            // 判断当前是否已固定
+            const isFixed = node.fixed === true || (node.fixed && node.fixed.x === true);
+            
+            nodesDataset.update({
+                id: nodeId,
+                fixed: !isFixed, // 切换状态
+                borderWidth: !isFixed ? 4 : 2, // 固定时边框变粗
+                color: { 
+                    // 固定时变成橙红色警告色，直观看出被钉住了
+                    border: !isFixed ? '#ff5722' : '#4e6ef2', 
+                    highlight: { border: !isFixed ? '#e64a19' : '#3a5cd3' }
+                }
+            });
+        }
+    });
+
+    // 解决问题3：右键点击修改标签
+    network.on("oncontext", function (params) {
+        // 阻止浏览器默认的右键菜单（防止弹出刷新/保存网页等）
+        params.event.preventDefault(); 
+        
+        // 获取鼠标位置对应的节点 ID
+        const nodeId = network.getNodeAt(params.pointer.DOM);
+        if (nodeId !== undefined) {
+            const node = nodesDataset.get(nodeId);
+            // 弹出浏览器原生输入框
+            const newLabel = prompt(`请输入节点 ${nodeId} 的新标签：`, node.label);
+            
+            if (newLabel !== null && newLabel.trim() !== "") {
+                nodesDataset.update({
+                    id: nodeId,
+                    label: newLabel.trim()
+                });
+            }
+        }
+    });
 }
 
-// 解析文本框里的数据并更新到图表
+// 解析文本并智能更新图表（保留原有固定状态和标签）
 function renderGraphFromText() {
     const text = document.getElementById('output').value.trim();
     if (!text) {
@@ -142,38 +193,46 @@ function renderGraphFromText() {
     const lines = text.split('\n').map(l => l.trim()).filter(l => l !== '');
     if (lines.length === 0) return;
 
-    // 解析第一行：节点数 n [边数 m]
     const firstLine = lines[0].split(/\s+/).map(Number);
     const n = firstLine[0];
-    if (isNaN(n) || n > 2000) return; // 超过2000个点渲染会卡，加个保护
+    if (isNaN(n) || n > 2000) return; 
 
-    // 构建新的节点数组
+    // 智能更新节点：保留已经在图中修改过的固定状态和标签
     let newNodes = [];
     for (let i = 1; i <= n; i++) {
-        newNodes.push({ id: i, label: String(i) });
+        let existingNode = nodesDataset.get(i);
+        if (existingNode) {
+            newNodes.push(existingNode); // 保留旧节点
+        } else {
+            newNodes.push({ id: i, label: String(i) }); // 新建节点
+        }
     }
+    
+    // 清理掉多余的旧节点（比如 n 从 10 改成 5，要删掉 6~10）
+    const currentNodesIds = nodesDataset.getIds();
+    const nodesToRemove = currentNodesIds.filter(id => id > n);
+    nodesDataset.remove(nodesToRemove);
+    
+    // 更新保留下来的节点
+    nodesDataset.update(newNodes);
 
-    // 构建新的边数组
+    // 重新绘制边
     let newEdges = [];
     for (let i = 1; i < lines.length; i++) {
         const parts = lines[i].split(/\s+/).map(Number);
         if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
             let edge = { from: parts[0], to: parts[1] };
             if (parts.length >= 3 && !isNaN(parts[2])) {
-                edge.label = String(parts[2]); // 添加边权标签
+                edge.label = String(parts[2]); 
             }
             newEdges.push(edge);
         }
     }
-
-    // 更新 Dataset。vis.js 会自动计算差异并做平滑动画
-    nodesDataset.clear();
-    nodesDataset.add(newNodes);
     edgesDataset.clear();
     edgesDataset.add(newEdges);
 }
 
-// ==================== 3. 页面交互逻辑 ====================
+// ==================== 3. 页面控制逻辑 ====================
 
 function updateInputs() {
     const n = parseInt(document.getElementById('n').value);
@@ -181,70 +240,4 @@ function updateInputs() {
     const maxwInput = document.getElementById('maxw');
     const type = document.getElementById('type').value;
 
-    mInput.disabled = true;
-    maxwInput.disabled = true;
-
-    if (!isNaN(n)) {
-        mInput.max = Math.min(10000, n * (n - 1) / 2);
-    }
-
-    if (type === 'graph') mInput.disabled = false;
-    if (type === 'w_tree') maxwInput.disabled = false;
-}
-
-// 点击生成按钮
-function generateData() {
-    let n = parseInt(document.getElementById('n').value);
-    let m = parseInt(document.getElementById('m').value);
-    let maxw = parseInt(document.getElementById('maxw').value);
-    const type = document.getElementById('type').value;
-
-    if (isNaN(n) || n < 1) n = 10;
-
-    let out = '';
-    switch (type) {
-        case 'tree': out = genTree(n); break;
-        case 'chain': out = genChain(n); break;
-        case 'daisy': out = genDaisy(n); break;
-        case 'binary': out = genBinary(n); break;
-        case 'graph':
-            if (isNaN(m) || m < 0) m = n;
-            out = genGraph(n, m); 
-            break;
-        case 'w_tree':
-            if (isNaN(maxw) || maxw < 1) maxw = 10;
-            out = genWeightTree(n, maxw); 
-            break;
-    }
-    
-    // 把生成的数据写入左侧文本框
-    document.getElementById('output').value = out;
-    // 触发图表重新渲染
-    renderGraphFromText();
-}
-
-function copyOutput() {
-    const text = document.getElementById('output').value;
-    const fb = document.getElementById('copyFeedback');
-    navigator.clipboard.writeText(text).then(() => {
-        fb.textContent = '已复制！';
-        fb.style.opacity = 1;
-        setTimeout(() => fb.style.opacity = 0, 2000);
-    });
-}
-
-// ==================== 4. 初始化 ====================
-document.addEventListener('DOMContentLoaded', () => {
-    // 1. 监听下拉框改变
-    document.getElementById('type').addEventListener('change', () => {
-        updateInputs(); generateData();
-    });
-    
-    // 2. 监听文本框的手动输入！实现键盘敲击即时渲染
-    document.getElementById('output').addEventListener('input', renderGraphFromText);
-    
-    // 3. 初始化并首次生成
-    updateInputs();
-    initNetwork();
-    generateData(); 
-});
+    mInput.disabled = t
