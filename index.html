@@ -44,9 +44,8 @@
             </div>
         </div>
 
-        <!-- 外观调节面板 -->
         <div class="visual-controls">
-            <div class="visual-title">🎨 外观调节 (实时生效)</div>
+            <div class="visual-title">外观设置</div>
             <div class="slider-row">
                 <label>节点大小:</label>
                 <input type="range" id="nodeSize" min="10" max="40" value="16" oninput="updateNodeSize(this.value)">
@@ -58,25 +57,32 @@
         </div>
 
         <div class="textarea-container">
-            <p class="hint">直接编辑下方文本，右侧图形将实时同步更新：</p>
+            <label class="hint">图数据 (邻接表 / 边集)</label>
             <textarea id="output" spellcheck="false" oninput="renderGraphFromText()"></textarea>
         </div>
     </div>
 
     <div class="panel right-panel">
-        <!-- 画布内的浮动提示 -->
-        <div class="graph-hint">💡 提示: 单击选中 | 双击固定/取消 | 右键修改标签 | 滚轮缩放</div>
-        <div id="mynetwork"></div>
+        <div class="graph-hint">双击: 固定/取消 | 右键: 编辑节点</div>
+        <!-- 彻底封杀默认右键菜单 -->
+        <div id="mynetwork" oncontextmenu="return false;"></div>
     </div>
 </div>
 
-<!-- 现代化的右键菜单 -->
-<div id="contextMenu" class="context-menu" onclick="event.stopPropagation();" onmousedown="event.stopPropagation();">
-    <div class="menu-title">修改节点标签</div>
-    <input type="text" id="nodeLabelInput" autocomplete="off" onkeydown="if(event.key==='Enter') saveNodeLabel()">
+<!-- 右键菜单 -->
+<div id="contextMenu" class="context-menu" onclick="event.stopPropagation();" onmousedown="event.stopPropagation();" oncontextmenu="return false;">
+    <div class="menu-title">编辑节点</div>
+    <div class="menu-item">
+        <label>标签</label>
+        <input type="text" id="nodeLabelInput" autocomplete="off" onkeydown="if(event.key==='Enter') saveNodeConfig()">
+    </div>
+    <div class="menu-item">
+        <label>颜色</label>
+        <input type="color" id="nodeColorInput" value="#ffffff">
+    </div>
     <div class="menu-buttons">
         <button class="btn-cancel" onclick="closeContextMenu()">取消</button>
-        <button class="btn-save" onclick="saveNodeLabel()">保存</button>
+        <button class="btn-save" onclick="saveNodeConfig()">保存</button>
     </div>
 </div>
 
