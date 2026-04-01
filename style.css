@@ -18,9 +18,9 @@ body { background-color: var(--bg-color); height: 100vh; display: flex; padding:
 .panel { background: var(--panel-bg); border-radius: var(--radius); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
 
 .left-panel { flex: 1; min-width: 350px; max-width: 450px; padding: 20px; }
-.right-panel { flex: 2; overflow: hidden; }
+.right-panel { position: relative; flex: 2; overflow: hidden; }
 
-h1 { font-size: 22px; color: var(--text-main); margin-bottom: 20px; text-align: center; }
+h1 { font-size: 24px; color: var(--text-main); margin-bottom: 20px; text-align: center; font-weight: 600; }
 
 .controls .row { display: flex; align-items: center; margin-bottom: 12px; }
 .controls label { width: 90px; font-size: 14px; color: var(--text-light); font-weight: 500; }
@@ -28,19 +28,19 @@ h1 { font-size: 22px; color: var(--text-main); margin-bottom: 20px; text-align: 
 .controls input:focus, .controls select:focus { border-color: var(--primary); }
 .controls input:disabled { background-color: #f3f4f6; cursor: not-allowed; }
 
-.button-group { display: flex; gap: 10px; margin-top: 20px; align-items: center; }
+.button-group { display: flex; gap: 10px; margin-top: 15px; align-items: center; }
 button { padding: 10px 16px; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500; transition: 0.2s; }
 button:hover { background: var(--primary-hover); }
 .btn-secondary { background: #6b7280; }
 .btn-secondary:hover { background: #4b5563; }
 .copy-feedback { font-size: 13px; color: #10b981; opacity: 0; transition: opacity 0.3s; }
 
-/* 图形显示调节面板 */
 .visual-controls { margin-top: 20px; padding: 15px; background: #f9fafb; border-radius: 6px; border: 1px solid var(--border); }
 .visual-title { font-size: 13px; font-weight: 600; color: var(--text-main); margin-bottom: 12px; }
 .slider-row { display: flex; align-items: center; margin-bottom: 10px; }
+.slider-row:last-child { margin-bottom: 0; }
 .slider-row label { width: 90px; font-size: 13px; color: var(--text-light); }
-.slider-row input[type="range"] { flex: 1; cursor: pointer; }
+.slider-row input[type="range"] { flex: 1; cursor: pointer; accent-color: var(--primary); }
 
 .textarea-container { margin-top: 20px; flex: 1; display: flex; flex-direction: column; }
 .hint { font-size: 12px; color: var(--text-light); margin-bottom: 8px; }
@@ -48,17 +48,23 @@ textarea { flex: 1; width: 100%; padding: 12px; border: 1px solid var(--border);
 textarea:focus { border-color: var(--primary); }
 
 #mynetwork { width: 100%; height: 100%; border: none; outline: none; }
+.graph-hint { position: absolute; top: 12px; right: 15px; background: rgba(255,255,255,0.85); padding: 8px 12px; font-size: 13px; color: #555; border-radius: 4px; z-index: 10; pointer-events: none; border: 1px solid #e5e7eb; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
 
-/* 自定义悬浮右键菜单 */
+/* 修复后的精美右键菜单 */
 .context-menu {
-    position: absolute; display: none; background: white; border: 1px solid var(--border);
-    box-shadow: 0 10px 25px rgba(0,0,0,0.15); border-radius: 8px; padding: 12px;
-    z-index: 9999; flex-direction: column; gap: 10px; width: 180px;
+    position: absolute; display: none; background: #ffffff; border: 1px solid var(--border);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.15); border-radius: 8px; padding: 14px;
+    z-index: 99999; flex-direction: column; gap: 12px; width: 220px;
 }
-.context-menu .menu-title { font-size: 12px; font-weight: bold; color: var(--text-light); }
-.context-menu input { padding: 8px; border: 1px solid var(--border); border-radius: 4px; outline: none; font-size: 14px; width: 100%; }
+.context-menu .menu-title { font-size: 13px; font-weight: bold; color: var(--text-main); }
+.context-menu input { padding: 8px; border: 1px solid var(--border); border-radius: 4px; outline: none; font-size: 14px; width: 100%; transition: border-color 0.2s; }
 .context-menu input:focus { border-color: var(--primary); }
-.context-menu button { padding: 8px; width: 100%; font-size: 13px; }
+.menu-buttons { display: flex; gap: 8px; }
+.menu-buttons button { flex: 1; padding: 8px; font-size: 13px; border-radius: 4px; border: none; cursor: pointer; }
+.btn-save { background: var(--primary); color: white; }
+.btn-save:hover { background: var(--primary-hover); }
+.btn-cancel { background: #f3f4f6; color: #4b5563; }
+.btn-cancel:hover { background: #e5e7eb; }
 
 @media (max-width: 800px) {
     body { height: auto; display: block; }
