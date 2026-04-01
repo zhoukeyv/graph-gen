@@ -49,34 +49,32 @@ let edgesDataset = null;
 let network = null;
 let contextNodeId = null;
 
-// 核心状态机：安全更新节点属性，防止相互覆盖
+// 核心状态机：确保边框变色和固定状态互不干扰
 function updateNodeStyle(nodeId, updates) {
     let node = nodesDataset.get(nodeId);
     if (!node) return;
     
-    // 继承或更新状态
     let isPinned = updates.isPinned !== undefined ? updates.isPinned : (node.isPinned || false);
-    let bgColor = updates.bgColor !== undefined ? updates.bgColor : ((node.color && node.color.background) ? node.color.background : '#ffffff');
+    // 颜色现在专门用于修改 border
+    let customBorder = updates.customColor !== undefined ? updates.customColor : (node.customColor || '#4e6ef2');
     let label = updates.label !== undefined ? updates.label : node.label;
-    
-    // 固定状态决定边框颜色，但背景色由我们自定义决定
-    let borderColor = isPinned ? '#ff5722' : '#4e6ef2';
-    let hlBorderColor = isPinned ? '#e64a19' : '#3a5cd3';
     
     nodesDataset.update({
         id: nodeId,
         label: label,
         isPinned: isPinned,
+        customColor: customBorder, // 缓存用户设置的颜色
         fixed: isPinned,
-        borderWidth: isPinned ? 4 : 2,
+        borderWidth: isPinned ? 5 : 2, // 固定的节点边框明显加粗
         color: {
-            background: bgColor,
-            border: borderColor,
+            background: '#ffffff', // 永远保持背景清爽
+            border: customBorder,
             highlight: {
-                background: bgColor, // 保证鼠标悬停时背景色不丢失
-                border: hlBorderColor
+                background: '#f0f4ff',
+                border: customBorder
             }
-        }
+        },
+        shadow: isPinned ? { enabled: true, color: 'rgba(0,0,0,0.3)', size: 10, x: 2, y: 2 } : true
     });
 }
 
@@ -92,7 +90,8 @@ function initNetwork() {
     const options = {
         nodes: {
             shape: 'circle',
-            color: { background: '#ffffff', border: '#4e6ef2', highlight: { background: '#ffffff', border: '#3a5cd3' } },
+            mass: 2.5, // 【关键优化】增加节点质量，拖拽时有沉稳感
+            color: { background: '#ffffff', border: '#4e6ef2', highlight: { background: '#f0f4ff', border: '#3a5cd3' } },
             borderWidth: 2, font: { color: '#333', size: initNodeSize, face: 'system-ui' }, shadow: true
         },
         edges: {
@@ -101,7 +100,14 @@ function initNetwork() {
         },
         physics: {
             enabled: true, solver: 'forceAtlas2Based',
-            forceAtlas2Based: { gravitationalConstant: -50, centralGravity: 0.01, springConstant: 0.08, springLength: initEdgeLength, damping: 0.4, avoidOverlap: 0 },
+            forceAtlas2Based: { 
+                gravitationalConstant: -50, 
+                centralGravity: 0.01, 
+                springConstant: 0.06, 
+                springLength: initEdgeLength, 
+                damping: 0.75, // 【关键优化】增加环境摩擦力，松手后迅速停稳，不再乱飞
+                avoidOverlap: 0.5 
+            },
             stabilization: { iterations: 150 } 
         },
         interaction: { hover: true, tooltipDelay: 200 }
@@ -109,19 +115,19 @@ function initNetwork() {
 
     network = new vis.Network(container, data, options);
 
-    // 单击关闭菜单
-    network.on("click", function () { closeContextMenu(); });
-
-    // 双击触发固定/解绑
-    network.on("doubleClick", function (params) {
-        if (params.nodes.length > 0) {
+    // 单击处理：包含 Shift+单击 (固定/解绑) 和 普通单击 (关闭菜单)
+    network.on("click", function (params) {
+        if (params.event.srcEvent.shiftKey && params.nodes.length > 0) {
             const nodeId = params.nodes[0];
             const node = nodesDataset.get(nodeId);
             updateNodeStyle(nodeId, { isPinned: !node.isPinned });
+            closeContextMenu();
+            return;
         }
+        closeContextMenu();
     });
 
-    // 拖拽控制
+    // 拖拽控制：拖拽时暂时解除固定，松开时恢复
     network.on("dragStart", function(params) {
         closeContextMenu();
         if (params.nodes.length > 0) {
@@ -138,7 +144,7 @@ function initNetwork() {
         }
     });
 
-    // 右键修改菜单
+    // 右键菜单绑定
     network.on("oncontext", function (params) {
         params.event.preventDefault(); 
         const nodeId = network.getNodeAt(params.pointer.DOM);
@@ -155,8 +161,8 @@ function initNetwork() {
             menu.style.display = 'flex';
             
             labelInput.value = node.label || String(nodeId);
-            const currentBg = (node.color && node.color.background) ? node.color.background : '#ffffff';
-            colorInput.value = currentBg;
+            // 读取用户缓存的自定义颜色，如果没有则用默认蓝
+            colorInput.value = node.customColor || '#4e6ef2';
             
             setTimeout(() => { labelInput.focus(); labelInput.select(); }, 50); 
         } else {
@@ -167,6 +173,7 @@ function initNetwork() {
     network.on("zoom", closeContextMenu);
 }
 
+// 文本更新图表
 window.renderGraphFromText = function() {
     if (!nodesDataset || !edgesDataset) return;
     const text = document.getElementById('output').value.trim();
@@ -220,17 +227,18 @@ window.closeContextMenu = function() {
     contextNodeId = null;
 }
 
-// 快速设色
+// 快速设色（点击色卡瞬间生效并关闭菜单）
 window.selectColor = function(hexStr) {
     document.getElementById('nodeColorInput').value = hexStr;
+    saveNodeConfig();
 }
 
-// 安全保存并触发状态机
+// 保存面板输入
 window.saveNodeConfig = function() {
     if (contextNodeId !== null) {
         updateNodeStyle(contextNodeId, {
             label: document.getElementById('nodeLabelInput').value.trim() || String(contextNodeId),
-            bgColor: document.getElementById('nodeColorInput').value
+            customColor: document.getElementById('nodeColorInput').value
         });
         closeContextMenu();
     }
