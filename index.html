@@ -64,7 +64,6 @@
 
     <div class="panel right-panel">
         <div class="graph-hint">双击: 固定/取消 | 右键: 编辑节点</div>
-        <!-- 彻底封杀默认右键菜单 -->
         <div id="mynetwork" oncontextmenu="return false;"></div>
     </div>
 </div>
@@ -76,9 +75,21 @@
         <label>标签</label>
         <input type="text" id="nodeLabelInput" autocomplete="off" onkeydown="if(event.key==='Enter') saveNodeConfig()">
     </div>
-    <div class="menu-item">
-        <label>颜色</label>
-        <input type="color" id="nodeColorInput" value="#ffffff">
+    <div class="menu-group">
+        <div class="menu-item">
+            <label>颜色</label>
+            <input type="color" id="nodeColorInput" value="#ffffff">
+        </div>
+        <!-- 预设快捷色卡 -->
+        <div class="color-presets">
+            <div class="preset-color" style="background: #ffffff;" onclick="selectColor('#ffffff')" title="默认白"></div>
+            <div class="preset-color" style="background: #ffadad;" onclick="selectColor('#ffadad')" title="淡红"></div>
+            <div class="preset-color" style="background: #ffd6a5;" onclick="selectColor('#ffd6a5')" title="淡橙"></div>
+            <div class="preset-color" style="background: #fdffb6;" onclick="selectColor('#fdffb6')" title="淡黄"></div>
+            <div class="preset-color" style="background: #caffbf;" onclick="selectColor('#caffbf')" title="淡绿"></div>
+            <div class="preset-color" style="background: #a0c4ff;" onclick="selectColor('#a0c4ff')" title="淡蓝"></div>
+            <div class="preset-color" style="background: #bdb2ff;" onclick="selectColor('#bdb2ff')" title="淡紫"></div>
+        </div>
     </div>
     <div class="menu-buttons">
         <button class="btn-cancel" onclick="closeContextMenu()">取消</button>
