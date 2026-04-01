@@ -41,6 +41,11 @@ function genWeightTree(n, maxw) {
     for (let i = 0; i < n - 2; i++) { let u = leaves.shift(), v = sequence[i], w = rand(1, maxw); edges.push(`${u} ${v} ${w}`); if (--degree[v] === 1) insertSorted(leaves, v); }
     edges.push(`${leaves[0]} ${leaves[1]} ${rand(1, maxw)}`); return n + '\n' + edges.join('\n');
 }
+function genWeightGraph(n, m, maxw) {
+    let set = new Set(); m = Math.min(m, n * (n - 1) / 2);
+    while (set.size < m) { let u = rand(1, n), v = rand(1, n); if (u === v) continue; if (u > v) [u, v] = [v, u]; set.add(`${u} ${v}`); }
+    let res = n + ' ' + m + '\n'; for (let s of set) res += `${s} ${rand(1, maxw)}\n`; return res.trim();
+}
 
 // ==================== 2. 全局状态与网络图核心 ====================
 
@@ -48,31 +53,29 @@ let nodesDataset = null;
 let edgesDataset = null;
 let network = null;
 let contextNodeId = null;
+let contextEdgeId = null; // 用于记录当前操作的边
 
-// 高级状态机
+// 不再附带任何多余符号，只保留纯粹的颜色与边框加粗变化
 function getStyleObject(node, updates) {
     node = node || {};
     let isPinned = updates.isPinned !== undefined ? updates.isPinned : (node.isPinned || false);
     let customBorder = updates.customColor !== undefined ? updates.customColor : (node.customColor || '#4e6ef2');
-    
-    let baseLabel = updates.label !== undefined ? updates.label : (node.baseLabel !== undefined ? node.baseLabel : (node.label || ''));
-    if (typeof baseLabel === 'string') { baseLabel = baseLabel.replace(/\s*📌$/, ''); }
+    let label = updates.label !== undefined ? updates.label : (node.label || '');
 
     return {
         id: node.id || updates.id,
-        baseLabel: baseLabel,
-        label: isPinned ? (baseLabel ? baseLabel + ' 📌' : '📌') : baseLabel,
+        label: label,
         isPinned: isPinned,
         customColor: customBorder,
         fixed: isPinned,
         borderWidth: isPinned ? 4 : 2,
-        borderWidthSelected: isPinned ? 4 : 2, // 【关键修复】被选中时，边框粗细与未选中时保持绝对一致，禁止变粗！
+        borderWidthSelected: isPinned ? 4 : 2,
         color: {
             background: isPinned ? '#f3f4f6' : '#ffffff',
             border: customBorder,
             highlight: {
                 background: isPinned ? '#e5e7eb' : '#f0f4ff',
-                border: customBorder // 选中时依然保持颜色不变
+                border: customBorder 
             }
         },
         shadow: isPinned ? { enabled: true, color: 'rgba(0,0,0,0.3)', size: 8, x: 2, y: 2 } : true
@@ -99,14 +102,14 @@ function initNetwork() {
             shape: 'circle',
             mass: 2.5,
             borderWidth: 2,
-            borderWidthSelected: 2, // 【关键修复】全局默认禁止变粗
+            borderWidthSelected: 2, 
             color: { background: '#ffffff', border: '#4e6ef2', highlight: { background: '#f0f4ff', border: '#3a5cd3' } },
             font: { color: '#333', size: initNodeSize, face: 'system-ui' }, 
             shadow: true
         },
         edges: {
             color: { color: '#999', highlight: '#4e6ef2' },
-            width: 2, font: { size: 14, align: 'top', background: '#ffffff' }, smooth: { type: 'continuous' } 
+            width: 2, font: { size: 14, align: 'top', background: '#ffffff', strokeWidth: 3, strokeColor: '#ffffff' }, smooth: { type: 'continuous' } 
         },
         physics: {
             enabled: true, solver: 'forceAtlas2Based',
@@ -145,13 +148,18 @@ function initNetwork() {
         }
     });
 
+    // 右键同时处理点和边
     network.on("oncontext", function (params) {
         params.event.preventDefault(); 
         const nodeId = network.getNodeAt(params.pointer.DOM);
+        const edgeId = network.getEdgeAt(params.pointer.DOM);
         
+        // 优先判断节点
         if (nodeId !== undefined) {
-            contextNodeId = nodeId;
+            contextNodeId = nodeId; contextEdgeId = null;
             const node = nodesDataset.get(nodeId);
+            
+            document.getElementById('edgeContextMenu').style.display = 'none';
             const menu = document.getElementById('contextMenu');
             const labelInput = document.getElementById('nodeLabelInput');
             const colorInput = document.getElementById('nodeColorInput');
@@ -160,12 +168,26 @@ function initNetwork() {
             menu.style.top = (params.event.clientY + window.scrollY + 10) + 'px';
             menu.style.display = 'flex';
             
-            let pureLabel = node.baseLabel !== undefined ? node.baseLabel : (node.label || String(nodeId));
-            if (typeof pureLabel === 'string') pureLabel = pureLabel.replace(/\s*📌$/, '');
-            labelInput.value = pureLabel;
-            
+            labelInput.value = node.label || String(nodeId);
             colorInput.value = node.customColor || '#4e6ef2';
             setTimeout(() => { labelInput.focus(); labelInput.select(); }, 50); 
+            
+        } 
+        // 其次判断边
+        else if (edgeId !== undefined) {
+            contextEdgeId = edgeId; contextNodeId = null;
+            const edge = edgesDataset.get(edgeId);
+            
+            document.getElementById('contextMenu').style.display = 'none';
+            const menu = document.getElementById('edgeContextMenu');
+            const labelInput = document.getElementById('edgeLabelInput');
+            
+            menu.style.left = (params.event.clientX + window.scrollX + 10) + 'px';
+            menu.style.top = (params.event.clientY + window.scrollY + 10) + 'px';
+            menu.style.display = 'flex';
+            
+            labelInput.value = edge.label || '';
+            setTimeout(() => { labelInput.focus(); labelInput.select(); }, 50);
         } else {
             closeContextMenu();
         }
@@ -205,7 +227,8 @@ window.renderGraphFromText = function() {
         const parts = lines[i].split(/\s+/).map(Number);
         if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
             let edge = { from: parts[0], to: parts[1] };
-            if (parts.length >= 3 && !isNaN(parts[2])) edge.label = String(parts[2]); 
+            // 保留可能存在的文本格式的边权
+            if (parts.length >= 3) { edge.label = parts.slice(2).join(' '); } 
             newEdges.push(edge);
         }
     }
@@ -225,7 +248,6 @@ window.updateEdgeLength = function(val) {
     }
 }
 
-// 【修复】一键全部操作，必须通过 nodesDataset.get() 转为纯数组再 map
 window.pinAll = function() {
     if(!nodesDataset) return;
     let updates = nodesDataset.get().map(node => getStyleObject(node, { isPinned: true }));
@@ -238,35 +260,31 @@ window.unpinAll = function() {
     nodesDataset.update(updates);
 }
 
-// 【新增】树状自动排版引擎
+// 完美的图论树排版算法 (根在上方，叶子向下的结构)
 window.formatAsTree = function() {
     if (!network || !nodesDataset) return;
     
-    // 1. 临时开启层级结构引擎，关闭物理引擎以强制排版
     network.setOptions({
         layout: {
             hierarchical: {
                 enabled: true,
-                direction: 'UD',       // Up-Down 纵向树
-                sortMethod: 'directed',// 按照图连接寻找层级
+                direction: 'UD',       
+                sortMethod: 'hubsize', // 【修改点】根据度数自动提取最大的节点作为根（图论标准树形态）
                 nodeSpacing: 100,
-                levelSeparation: 100
+                levelSeparation: 80
             }
         },
         physics: { enabled: false }
     });
 
-    // 2. 给予引擎 50ms 的时间瞬间计算坐标
     setTimeout(() => {
         let positions = network.getPositions();
         
-        // 3. 恢复标准布局引擎
         network.setOptions({
             layout: { hierarchical: { enabled: false } },
             physics: { enabled: true }
         });
 
-        // 4. 将所有节点赋予算出的树坐标，并强制固定（📌）
         let updates = nodesDataset.get().map(node => {
             let style = getStyleObject(node, { isPinned: true });
             if (positions[node.id]) {
@@ -276,15 +294,15 @@ window.formatAsTree = function() {
             return style;
         });
         nodesDataset.update(updates);
-        
-        // 5. 视角平滑居中适应
         network.fit({ animation: { duration: 600, easingFunction: "easeInOutQuad" } });
     }, 50);
 }
 
 window.closeContextMenu = function() {
     document.getElementById('contextMenu').style.display = 'none';
+    document.getElementById('edgeContextMenu').style.display = 'none';
     contextNodeId = null;
+    contextEdgeId = null;
 }
 
 window.selectColor = function(hexStr) {
@@ -302,7 +320,35 @@ window.saveNodeConfig = function() {
     }
 }
 
-// 生成器业务逻辑
+// 保存边权并【智能双向同步至左侧代码框】
+window.saveEdgeConfig = function() {
+    if (contextEdgeId !== null) {
+        let newWeight = document.getElementById('edgeLabelInput').value.trim();
+        let edge = edgesDataset.get(contextEdgeId);
+        
+        // 1. 更新图形视觉
+        edgesDataset.update({ id: contextEdgeId, label: newWeight });
+        
+        // 2. 智能更新左侧文本区域，不破坏其他无关文本
+        if (edge) {
+            let text = document.getElementById('output').value;
+            let lines = text.split('\n');
+            for (let i = 1; i < lines.length; i++) {
+                let parts = lines[i].trim().split(/\s+/);
+                if (parts.length >= 2) {
+                    let u = parseInt(parts[0]), v = parseInt(parts[1]);
+                    if ((u == edge.from && v == edge.to) || (u == edge.to && v == edge.from)) {
+                        lines[i] = newWeight ? `${u} ${v} ${newWeight}` : `${u} ${v}`;
+                        break; 
+                    }
+                }
+            }
+            document.getElementById('output').value = lines.join('\n');
+        }
+        closeContextMenu();
+    }
+}
+
 window.updateInputs = function() {
     const n = parseInt(document.getElementById('n').value);
     const mInput = document.getElementById('m');
@@ -311,8 +357,8 @@ window.updateInputs = function() {
 
     mInput.disabled = true; maxwInput.disabled = true;
     if (!isNaN(n)) mInput.max = Math.min(10000, n * (n - 1) / 2);
-    if (type === 'graph') mInput.disabled = false;
-    if (type === 'w_tree') maxwInput.disabled = false;
+    if (type === 'graph' || type === 'w_graph') mInput.disabled = false;
+    if (type === 'w_tree' || type === 'w_graph') maxwInput.disabled = false;
 }
 
 window.generateData = function() {
@@ -332,6 +378,7 @@ window.generateData = function() {
         case 'binary': out = genBinary(n); break;
         case 'graph': if (isNaN(m) || m < 0) m = n; out = genGraph(n, m); break;
         case 'w_tree': if (isNaN(maxw) || maxw < 1) maxw = 10; out = genWeightTree(n, maxw); break;
+        case 'w_graph': if (isNaN(m) || m < 0) m = n; if (isNaN(maxw) || maxw < 1) maxw = 10; out = genWeightGraph(n, m, maxw); break;
     }
     
     document.getElementById('output').value = out;
