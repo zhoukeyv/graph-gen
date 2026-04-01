@@ -26,18 +26,32 @@
                 <label>最大边权:</label>
                 <input type="number" id="maxw" value="10" min="1" max="1000">
             </div>
+            
             <div class="row">
-                <label>图类型:</label>
-                <select id="type">
-                    <option value="tree">随机树 (Prüfer序列)</option>
-                    <option value="chain">链</option>
-                    <option value="daisy">菊花图</option>
-                    <option value="binary">二叉树</option>
-                    <option value="graph">随机无向图</option>
-                    <option value="w_tree">带权随机树</option>
-                    <option value="w_graph">带权随机无向图</option>
+                <label>图结构:</label>
+                <select id="graphStructure" class="multi-select">
+                    <option value="tree">随机树 (Prüfer)</option>
+                    <option value="chain">链形图 (Chain)</option>
+                    <option value="daisy">菊花图 (Star)</option>
+                    <option value="binary">二叉树 (Binary)</option>
+                    <option value="graph">普通随机图</option>
                 </select>
             </div>
+            <div class="row">
+                <label>边方向:</label>
+                <select id="isDirected" class="multi-select">
+                    <option value="false">无向图 (Undirected)</option>
+                    <option value="true">有向图 (Directed)</option>
+                </select>
+            </div>
+            <div class="row">
+                <label>边权重:</label>
+                <select id="isWeighted" class="multi-select">
+                    <option value="false">无权图 (Unweighted)</option>
+                    <option value="true">带权图 (Weighted)</option>
+                </select>
+            </div>
+
             <div class="button-group">
                 <button onclick="generateData()">生成数据</button>
                 <button onclick="copyOutput()" class="btn-secondary">一键复制</button>
@@ -69,7 +83,11 @@
     </div>
 
     <div class="panel right-panel">
-        <div class="graph-hint">Shift+左键: 固定/解绑 | 右键: 编辑节点与边</div>
+        <div class="graph-hint">
+            <strong>左键:</strong> 拖拽/选中 | <strong>Shift+左键:</strong> 固定/解绑<br>
+            <strong>右键:</strong> 编辑节点/边权<br>
+            <strong>快捷色:</strong> 选中后按 Alt + R/B/G/Y/P/D
+        </div>
         <div id="mynetwork" oncontextmenu="return false;"></div>
     </div>
 </div>
@@ -87,12 +105,12 @@
             <input type="color" id="nodeColorInput" value="#4e6ef2">
         </div>
         <div class="color-presets">
-            <div class="preset-color" style="border-color: #4e6ef2;" onclick="selectColor('#4e6ef2')" title="默认蓝"></div>
-            <div class="preset-color" style="border-color: #e63946;" onclick="selectColor('#e63946')" title="赤红"></div>
-            <div class="preset-color" style="border-color: #f4a261;" onclick="selectColor('#f4a261')" title="橙黄"></div>
-            <div class="preset-color" style="border-color: #2a9d8f;" onclick="selectColor('#2a9d8f')" title="翠绿"></div>
-            <div class="preset-color" style="border-color: #9d4edd;" onclick="selectColor('#9d4edd')" title="深紫"></div>
-            <div class="preset-color" style="border-color: #333333;" onclick="selectColor('#333333')" title="纯黑"></div>
+            <div class="preset-color" style="border-color: #e63946;" onclick="selectColor('#e63946')" title="Alt+R (赤红)"></div>
+            <div class="preset-color" style="border-color: #4e6ef2;" onclick="selectColor('#4e6ef2')" title="Alt+B (默认蓝)"></div>
+            <div class="preset-color" style="border-color: #2a9d8f;" onclick="selectColor('#2a9d8f')" title="Alt+G (翠绿)"></div>
+            <div class="preset-color" style="border-color: #f4a261;" onclick="selectColor('#f4a261')" title="Alt+Y (橙黄)"></div>
+            <div class="preset-color" style="border-color: #9d4edd;" onclick="selectColor('#9d4edd')" title="Alt+P (深紫)"></div>
+            <div class="preset-color" style="border-color: #333333;" onclick="selectColor('#333333')" title="Alt+D (纯黑)"></div>
         </div>
     </div>
     <div class="menu-buttons">
