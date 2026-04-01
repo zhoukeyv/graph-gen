@@ -41,9 +41,11 @@ button:hover { background: var(--primary-hover); }
 .slider-row label { width: 90px; font-size: 13px; color: var(--text-light); }
 .slider-row input[type="range"] { flex: 1; cursor: pointer; accent-color: var(--primary); }
 
-.action-row { display: flex; gap: 8px; margin-top: 15px; }
-.btn-action { flex: 1; padding: 8px; font-size: 13px; background: #ffffff; color: #4b5563; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; transition: 0.2s; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+.action-row { display: flex; gap: 6px; margin-top: 15px; }
+.btn-action { flex: 1; padding: 8px 4px; font-size: 12px; background: #ffffff; color: #4b5563; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; transition: 0.2s; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
 .btn-action:hover { background: #f3f4f6; border-color: #9ca3af; color: #111827; }
+.btn-tree-layout { color: #059669; border-color: #a7f3d0; background: #ecfdf5; }
+.btn-tree-layout:hover { background: #d1fae5; border-color: #6ee7b7; color: #047857; }
 
 .textarea-container { margin-top: 20px; flex: 1; display: flex; flex-direction: column; }
 .hint { font-size: 13px; font-weight: 600; color: var(--text-main); margin-bottom: 8px; }
