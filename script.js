@@ -281,3 +281,82 @@ window.saveEdgeConfig = function() {
         edgesDataset.update({ id: contextEdgeId, label: newWeight });
         
         if (edge) {
+            let text = document.getElementById('output').value;
+            let lines = text.split('\n');
+            let isDirected = document.getElementById('isDirected').value === 'true';
+            
+            for (let i = 1; i < lines.length; i++) {
+                let parts = lines[i].trim().split(/\s+/);
+                if (parts.length >= 2) {
+                    let u = parseInt(parts[0]), v = parseInt(parts[1]);
+                    let match = isDirected ? (u == edge.from && v == edge.to) : ((u == edge.from && v == edge.to) || (u == edge.to && v == edge.from));
+                    if (match) { lines[i] = newWeight ? `${u} ${v} ${newWeight}` : `${u} ${v}`; break; }
+                }
+            }
+            document.getElementById('output').value = lines.join('\n');
+        }
+        closeContextMenu();
+    }
+}
+
+// ==================== 5. 下拉联动与生成 ====================
+
+window.updateInputs = function() {
+    const n = parseInt(document.getElementById('n').value);
+    const mInput = document.getElementById('m'), maxwInput = document.getElementById('maxw');
+    const struct = document.getElementById('graphStructure').value, isDirSelect = document.getElementById('isDirected'), isWSelect = document.getElementById('isWeighted');
+
+    if (struct !== 'graph') { isDirSelect.value = "false"; isDirSelect.disabled = true; mInput.disabled = true; } 
+    else { isDirSelect.disabled = false; mInput.disabled = false; }
+
+    let isDir = isDirSelect.value === 'true';
+    if (!isNaN(n)) mInput.max = isDir ? n * (n - 1) : Math.min(10000, n * (n - 1) / 2);
+    maxwInput.disabled = (isWSelect.value === 'false');
+    
+    renderGraphFromText();
+}
+
+window.generateData = function() {
+    let n = parseInt(document.getElementById('n').value), m = parseInt(document.getElementById('m').value), maxw = parseInt(document.getElementById('maxw').value);
+    const struct = document.getElementById('graphStructure').value, isDirected = (document.getElementById('isDirected').value === 'true'), isWeighted = (document.getElementById('isWeighted').value === 'true');
+
+    if (isNaN(n) || n < 1) n = 10;
+    if (n > 300) { alert("节点数暂时限制在 300 以内。"); n = 300; document.getElementById('n').value = 300; }
+    if (isNaN(m) || m < 0) m = n;
+    if (isNaN(maxw) || maxw < 1) maxw = 10;
+
+    let edges = [];
+    switch (struct) {
+        case 'tree': edges = getEdges_Tree(n); break;
+        case 'chain': edges = getEdges_Chain(n); break;
+        case 'daisy': edges = getEdges_Daisy(n); break;
+        case 'binary': edges = getEdges_Binary(n); break;
+        case 'graph': edges = getEdges_Graph(n, m, isDirected); break;
+    }
+    if (isWeighted) { edges = edges.map(e => [e[0], e[1], rand(1, maxw)]); }
+
+    let out = struct === 'graph' ? `${n} ${edges.length}\n` : `${n}\n`;
+    for(let e of edges) { out += e.join(' ') + '\n'; }
+    
+    document.getElementById('output').value = out.trim();
+    renderGraphFromText();
+}
+
+window.copyOutput = function() {
+    navigator.clipboard.writeText(document.getElementById('output').value).then(() => {
+        const fb = document.getElementById('copyFeedback');
+        fb.textContent = '已复制！'; fb.style.opacity = 1;
+        setTimeout(() => fb.style.opacity = 0, 2000);
+    });
+}
+
+// ==================== 6. 初始化 ====================
+document.addEventListener('DOMContentLoaded', () => {
+    try {
+        ['graphStructure', 'isDirected', 'isWeighted'].forEach(id => { document.getElementById(id).addEventListener('change', () => { updateInputs(); generateData(); }); });
+        document.getElementById('n').addEventListener('change', updateInputs);
+        updateInputs(); initNetwork(); generateData(); 
+    } catch (error) {
+        console.error(error); alert("加载失败，请按 Ctrl + F5。\n错误: " + error.message);
+    }
+});
