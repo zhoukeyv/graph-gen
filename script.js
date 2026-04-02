@@ -48,16 +48,15 @@ let network = null;
 let contextNodeId = null;
 let contextEdgeId = null;
 
-// 【核心修复机制】完美模拟你发现的“修改弹簧长度以解开死锁”的操作
 window.forcePhysicsUpdate = function() {
     if (!network) return;
     const currentEdgeLen = parseInt(document.getElementById('edgeLength').value) || 100;
     network.setOptions({
-        edges: { smooth: { type: 'continuous' } }, // 强制拉直麻花边线
+        edges: { smooth: { type: 'continuous' } }, 
         physics: {
             enabled: true,
             solver: 'forceAtlas2Based',
-            forceAtlas2Based: { springLength: currentEdgeLen } // 重新注入弹簧长度，打碎引擎缓存！
+            forceAtlas2Based: { springLength: currentEdgeLen } 
         }
     });
     network.startSimulation();
@@ -105,7 +104,11 @@ function initNetwork() {
     network.on("click", function (params) {
         if (params.event.srcEvent.shiftKey && params.nodes.length > 0) {
             updateNodeStyle(params.nodes[0], { isPinned: !nodesDataset.get(params.nodes[0]).isPinned });
-            window.forcePhysicsUpdate(); // 解绑单点时，模拟拉动滑块操作
+            
+            // 【修复1】强制取消选中状态！这样 Shift+点击 就真的只有“固定”效果了
+            network.unselectAll(); 
+            
+            window.forcePhysicsUpdate(); 
             closeContextMenu(); return;
         }
         closeContextMenu();
@@ -202,39 +205,35 @@ window.renderGraphFromText = function() {
 
 // ==================== 4. 快捷键与面板控制 ====================
 
-let activeKeys = {};
+// 【修复2】彻底重构快捷键逻辑！只要有节点被选中，直接敲击字母即可。100%触发！
 document.addEventListener('keydown', e => {
+    // 如果焦点在左侧文本框、或者右键菜单的输入框里，不要触发快捷键
     if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
 
-    activeKeys[e.code] = true;
+    let color = null;
+    // 直接判定字母键 (R=红, G=绿, B=蓝, Y=黄, P=紫, D=黑)
+    if (e.code === 'KeyR') color = '#e63946';
+    else if (e.code === 'KeyB') color = '#4e6ef2';
+    else if (e.code === 'KeyG') color = '#2a9d8f';
+    else if (e.code === 'KeyY') color = '#f4a261';
+    else if (e.code === 'KeyP') color = '#9d4edd';
+    else if (e.code === 'KeyD') color = '#333333';
 
-    if (e.altKey && activeKeys['KeyK']) {
-        let color = null;
-        if (e.code === 'KeyR') color = '#e63946';
-        else if (e.code === 'KeyB') color = '#4e6ef2';
-        else if (e.code === 'KeyG') color = '#2a9d8f';
-        else if (e.code === 'KeyY') color = '#f4a261';
-        else if (e.code === 'KeyP') color = '#9d4edd';
-        else if (e.code === 'KeyD') color = '#333333';
-
-        if (color && network) {
+    if (color && network) {
+        let selectedNodes = network.getSelectedNodes();
+        if (selectedNodes.length > 0) {
             e.preventDefault(); 
-            let selectedNodes = network.getSelectedNodes();
-            if (selectedNodes.length > 0) {
-                let updates = selectedNodes.map(id => {
-                    let node = nodesDataset.get(id);
-                    let currentColor = node.customColor || '#4e6ef2';
-                    let newColor = (currentColor === color) ? '#4e6ef2' : color;
-                    return getStyleObject(node, { customColor: newColor });
-                });
-                nodesDataset.update(updates);
-            }
+            let updates = selectedNodes.map(id => {
+                let node = nodesDataset.get(id);
+                let currentColor = node.customColor || '#4e6ef2';
+                // 如果当前已经是这个颜色了，再按一次恢复成蓝色
+                let newColor = (currentColor === color) ? '#4e6ef2' : color;
+                return getStyleObject(node, { customColor: newColor });
+            });
+            nodesDataset.update(updates);
         }
     }
 });
-
-document.addEventListener('keyup', e => { activeKeys[e.code] = false; });
-window.addEventListener('blur', () => { activeKeys = {}; });
 
 window.updateNodeSize = function(val) { if(network) { network.setOptions({ nodes: { font: { size: parseInt(val) } } }); } }
 window.updateEdgeLength = function(val) { window.forcePhysicsUpdate(); }
@@ -243,7 +242,7 @@ window.pinAll = function() { if(!nodesDataset) return; nodesDataset.update(nodes
 window.unpinAll = function() { 
     if(!nodesDataset) return; 
     nodesDataset.update(nodesDataset.get().map(node => getStyleObject(node, { isPinned: false }))); 
-    window.forcePhysicsUpdate(); // 解开所有节点时，强制模拟滑块重置引擎
+    window.forcePhysicsUpdate(); 
 }
 
 window.formatAsTree = function() {
@@ -257,11 +256,8 @@ window.formatAsTree = function() {
 
     setTimeout(() => {
         let positions = network.getPositions();
-        
-        // 1. 先关闭层级结构
         network.setOptions({ layout: { hierarchical: { enabled: false } } });
 
-        // 2. 将计算好的层级坐标固定写死到节点上
         let updates = nodesDataset.get().map(node => {
             let style = getStyleObject(node, { isPinned: true });
             if (positions[node.id]) { style.x = positions[node.id].x; style.y = positions[node.id].y; }
@@ -269,9 +265,7 @@ window.formatAsTree = function() {
         });
         nodesDataset.update(updates);
         
-        // 3. 施加你发现的魔法：强制刷新边线和物理参数
         window.forcePhysicsUpdate();
-        
         network.fit({ animation: { duration: 600, easingFunction: "easeInOutQuad" } });
     }, 50);
 }
