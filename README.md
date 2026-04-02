@@ -1,1 +1,1 @@
-# graph-gen
+# Graph-Editor
