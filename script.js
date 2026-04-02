@@ -1,48 +1,65 @@
 let network = null;
 let nodesDataset = new vis.DataSet();
 let edgesDataset = new vis.DataSet();
-
 let contextNodeId = null;
 let contextEdgeId = null;
 
+// 手感调优的物理引擎（不乱飞）
 const PHYSICS_CONFIG = { gravitationalConstant: -40, centralGravity: 0.01, springConstant: 0.08, damping: 0.4 };
 
+// 兼容节点自定义标签、自定义颜色和固定状态的样式生成器
 function getStyleObject(baseObj, extra = {}) {
-    let isPinned = extra.isPinned || false;
-    let label = extra.label || String(baseObj.id);
-    let colorObj = isPinned ? { background: '#ff9800', border: '#e65100' } : { background: '#ffffff', border: '#4e6ef2' };
+    let isPinned = extra.isPinned !== undefined ? extra.isPinned : (baseObj.fixed && baseObj.fixed.x);
+    let customColor = extra.customColor || baseObj.customColor || '#4e6ef2';
+    let customLabel = extra.customLabel !== undefined ? extra.customLabel : (baseObj.customLabel !== undefined ? baseObj.customLabel : String(baseObj.id));
+    
+    // 如果固定，边框加粗变为红色醒目，未固定则保持主题色
+    let bdWidth = isPinned ? 4 : 2;
+    let bdColor = isPinned ? '#e74c3c' : customColor;
+    let size = parseInt(document.getElementById('nodeSize').value) || 16;
+
     return Object.assign({}, baseObj, {
-        label: label, shape: 'circle', borderWidth: 2,
-        color: { background: colorObj.background, border: colorObj.border, highlight: { background: '#f0f4ff', border: '#4e6ef2' } },
-        font: { size: 16, color: '#333' },
-        fixed: { x: isPinned, y: isPinned }
-    }, extra);
+        label: customLabel,
+        shape: 'dot', size: size, borderWidth: bdWidth,
+        color: { background: customColor, border: bdColor, highlight: { border: '#000' } },
+        font: { size: 14, color: '#333' },
+        fixed: { x: isPinned, y: isPinned },
+        customColor: customColor,
+        customLabel: customLabel
+    });
 }
 
 function initNetwork() {
     const container = document.getElementById('mynetwork');
     const data = { nodes: nodesDataset, edges: edgesDataset };
     const options = {
-        nodes: { scaling: { min: 10, max: 30 } },
-        edges: { 
-            color: { color: '#999', highlight: '#4e6ef2' }, width: 2, 
-            font: { size: 14, align: 'top', background: '#ffffff', strokeWidth: 3 },
-            smooth: false, arrows: { to: { enabled: false, scaleFactor: 0.8 } } 
-        },
+        edges: { color: { color: '#999', highlight: '#333' }, width: 2, font: { size: 14, align: 'top', background: '#ffffff', strokeWidth: 3 }, smooth: false, arrows: { to: { enabled: false, scaleFactor: 0.8 } } },
         physics: { enabled: true, solver: 'forceAtlas2Based', forceAtlas2Based: Object.assign({}, PHYSICS_CONFIG, { springLength: 100 }) },
         interaction: { hover: true, multiselect: false, navigationButtons: true }
     };
-    
     network = new vis.Network(container, data, options);
 
+    // 拖拽后自动固定
     network.on("dragEnd", function (params) {
         if (params.nodes && params.nodes.length > 0) {
             let nodeId = params.nodes[0];
             let pos = network.getPositions([nodeId])[nodeId];
-            nodesDataset.update(getStyleObject({ id: nodeId }, { isPinned: true, x: pos.x, y: pos.y }));
+            nodesDataset.update(getStyleObject(nodesDataset.get(nodeId), { isPinned: true, x: pos.x, y: pos.y }));
         }
     });
 
+    // 高级交互1：Shift + 左键 快速固定/解开单个节点
+    network.on("click", function(params) {
+        if (params.event.shiftKey && params.nodes.length > 0) {
+            let nodeId = params.nodes[0];
+            let node = nodesDataset.get(nodeId);
+            let isPinned = !(node.fixed && node.fixed.x);
+            nodesDataset.update(getStyleObject(node, { isPinned: isPinned }));
+        }
+        closeContextMenu();
+    });
+
+    // 右键呼出菜单
     network.on("oncontext", function (params) {
         params.event.preventDefault(); closeContextMenu();
         let pointer = params.pointer.DOM;
@@ -53,27 +70,54 @@ function initNetwork() {
         else if (edgeId !== undefined) { network.selectEdges([edgeId]); showEdgeContextMenu(edgeId, params.event.clientX, params.event.clientY); }
     });
 
-    network.on("click", closeContextMenu);
     network.on("dragStart", closeContextMenu);
     network.on("zoom", closeContextMenu);
-    
     renderGraphFromText();
+}
+
+// 高级交互2：键盘快捷键变色 (R, B, G, Y, P, D)
+document.addEventListener('keydown', function(e) {
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return; // 在输入框打字时不触发
+    if (!network) return;
+    let selectedNodes = network.getSelectedNodes();
+    if (selectedNodes.length === 0) return;
+
+    const colorMap = {
+        'r': '#e74c3c', 'R': '#e74c3c', // 红
+        'b': '#3498db', 'B': '#3498db', // 蓝
+        'g': '#2ecc71', 'G': '#2ecc71', // 绿
+        'y': '#f1c40f', 'Y': '#f1c40f', // 黄
+        'p': '#9b59b6', 'P': '#9b59b6', // 紫
+        'd': '#4e6ef2', 'D': '#4e6ef2'  // 默认蓝
+    };
+    
+    if (colorMap[e.key]) {
+        let updates = selectedNodes.map(id => getStyleObject(nodesDataset.get(id), { customColor: colorMap[e.key] }));
+        nodesDataset.update(updates);
+    }
+});
+
+// ====== 控制面板功能 ======
+window.updateNodeSize = function() {
+    let updates = nodesDataset.get().map(n => getStyleObject(n));
+    nodesDataset.update(updates);
 }
 
 window.forcePhysicsUpdate = function() {
     if (!network) return;
     const currentEdgeLen = parseInt(document.getElementById('edgeLength').value) || 100;
-    network.setOptions({ 
-        edges: { smooth: false }, 
-        physics: { enabled: true, solver: 'forceAtlas2Based', forceAtlas2Based: Object.assign({}, PHYSICS_CONFIG, { springLength: currentEdgeLen }) } 
-    });
+    network.setOptions({ edges: { smooth: false }, physics: { enabled: true, solver: 'forceAtlas2Based', forceAtlas2Based: Object.assign({}, PHYSICS_CONFIG, { springLength: currentEdgeLen }) } });
     network.startSimulation();
 }
 
+window.pinAll = function() { nodesDataset.update(nodesDataset.get().map(n => getStyleObject(n, { isPinned: true }))); }
+window.unpinAll = function() { nodesDataset.update(nodesDataset.get().map(n => getStyleObject(n, { isPinned: false }))); }
+
+// 指定根节点的树状排版 (BFS)
 window.formatAsTree = function() {
     if (!network || !nodesDataset) return;
     let rootId = document.getElementById('treeRootInput').value.trim();
-    if (!rootId || !nodesDataset.get(rootId)) { alert(`未找到节点 [${rootId}]！请确认节点名是否正确。`); return; }
+    if (!rootId || !nodesDataset.get(rootId)) { alert(`图表中未找到节点 [${rootId}]`); return; }
     
     let adj = {}; nodesDataset.getIds().forEach(id => adj[id] = []);
     edgesDataset.get().forEach(e => { adj[e.from].push(e.to); adj[e.to].push(e.from); });
@@ -91,7 +135,7 @@ window.formatAsTree = function() {
     }, 50);
 }
 
-// ====== 彻底修复了渲染死锁的解析函数 ======
+// ====== 双向绑定解析核心 (解决死锁防卡死) ======
 window.renderGraphFromText = function() {
     if (!nodesDataset || !edgesDataset || !network) return;
     let isDirected = document.getElementById('isDirected').value === 'true'; 
@@ -99,13 +143,10 @@ window.renderGraphFromText = function() {
     
     const text = document.getElementById('output').value.trim(); 
     if (!text) { nodesDataset.clear(); edgesDataset.clear(); return; }
-    
     const lines = text.split('\n').map(l => l.trim()).filter(l => l !== ''); 
     if (lines.length === 0) { nodesDataset.clear(); edgesDataset.clear(); return; }
-    
-    let uniqueNodes = new Set();
-    let parsedEdges = [];
-    
+
+    let uniqueNodes = new Set(); let parsedEdges = [];
     lines.forEach(line => {
         const parts = line.split(/\s+/);
         if (parts.length === 1) { uniqueNodes.add(parts[0]); } 
@@ -117,11 +158,10 @@ window.renderGraphFromText = function() {
         }
     });
     
-    // 只增加新节点，决不重新推入老节点（避免了引擎死循环）
     let currentIds = new Set(nodesDataset.getIds().map(String));
     let nodesToAdd = [];
     uniqueNodes.forEach(nodeId => {
-        if (!currentIds.has(nodeId)) { nodesToAdd.push(getStyleObject({ id: nodeId }, { label: String(nodeId) })); }
+        if (!currentIds.has(nodeId)) { nodesToAdd.push(getStyleObject({ id: nodeId })); }
     });
     
     let nodeIdsToRemove = Array.from(currentIds).filter(id => !uniqueNodes.has(id));
@@ -132,14 +172,62 @@ window.renderGraphFromText = function() {
     setTimeout(() => { window.forcePhysicsUpdate(); }, 10);
 }
 
-// ====== 右键菜单与交互 ======
-function showNodeContextMenu(nodeId, x, y) { contextNodeId = nodeId; let menu = document.getElementById('nodeContextMenu'); let node = nodesDataset.get(nodeId); let isPinned = node && node.fixed && node.fixed.x; document.getElementById('pinMenuBtn').innerText = isPinned ? '取消固定位置' : '固定当前位置'; menu.style.left = x + 'px'; menu.style.top = y + 'px'; menu.style.display = 'block'; }
-function showEdgeContextMenu(edgeId, x, y) { contextEdgeId = edgeId; let menu = document.getElementById('edgeContextMenu'); let edge = edgesDataset.get(edgeId); document.getElementById('edgeLabelInput').value = edge.label || ''; menu.style.left = x + 'px'; menu.style.top = y + 'px'; menu.style.display = 'block'; setTimeout(() => document.getElementById('edgeLabelInput').focus(), 50); }
+// ====== 右键菜单与高级交互 =======
+function showNodeContextMenu(nodeId, x, y) { 
+    contextNodeId = nodeId; let menu = document.getElementById('nodeContextMenu'); 
+    let node = nodesDataset.get(nodeId); 
+    document.getElementById('nodeLabelInput').value = node.customLabel || node.id;
+    document.getElementById('nodeColorInput').value = node.customColor || '#4e6ef2';
+    menu.style.left = x + 'px'; menu.style.top = y + 'px'; menu.style.display = 'block'; 
+    setTimeout(() => document.getElementById('nodeLabelInput').focus(), 50);
+}
+
+function showEdgeContextMenu(edgeId, x, y) { 
+    contextEdgeId = edgeId; let menu = document.getElementById('edgeContextMenu'); 
+    let edge = edgesDataset.get(edgeId); 
+    document.getElementById('edgeLabelInput').value = edge.label || ''; 
+    menu.style.left = x + 'px'; menu.style.top = y + 'px'; menu.style.display = 'block'; 
+    setTimeout(() => document.getElementById('edgeLabelInput').focus(), 50); 
+}
+
 window.closeContextMenu = function() { document.getElementById('nodeContextMenu').style.display = 'none'; document.getElementById('edgeContextMenu').style.display = 'none'; contextNodeId = null; contextEdgeId = null; }
-window.deleteNode = function() { if (contextNodeId !== null) { let lines = document.getElementById('output').value.split('\n'); let newLines = lines.filter(line => !line.trim().split(/\s+/).includes(String(contextNodeId))); document.getElementById('output').value = newLines.join('\n').trim(); renderGraphFromText(); closeContextMenu(); } }
-window.deleteEdge = function() { if (contextEdgeId !== null) { let edge = edgesDataset.get(contextEdgeId); if (edge) { let lines = document.getElementById('output').value.split('\n'); let isDirected = document.getElementById('isDirected').value === 'true'; for (let i = 0; i < lines.length; i++) { let parts = lines[i].trim().split(/\s+/); if (parts.length >= 2) { let u = parts[0], v = parts[1]; let match = isDirected ? (u == edge.from && v == edge.to) : ((u == edge.from && v == edge.to) || (u == edge.to && v == edge.from)); if (match) { lines.splice(i, 1); break; } } } document.getElementById('output').value = lines.join('\n').trim(); renderGraphFromText(); } closeContextMenu(); } }
-window.pinNode = function() { if (contextNodeId !== null) { let node = nodesDataset.get(contextNodeId); let isPinned = !(node.fixed && node.fixed.x); nodesDataset.update(getStyleObject(node, { isPinned: isPinned })); closeContextMenu(); } }
-window.saveEdgeConfig = function() { if (contextEdgeId !== null) { let newWeight = document.getElementById('edgeLabelInput').value.trim(); let edge = edgesDataset.get(contextEdgeId); if (edge) { let lines = document.getElementById('output').value.split('\n'); let isDirected = document.getElementById('isDirected').value === 'true'; for (let i = 0; i < lines.length; i++) { let parts = lines[i].trim().split(/\s+/); if (parts.length >= 2) { let u = parts[0], v = parts[1]; let match = isDirected ? (u == edge.from && v == edge.to) : ((u == edge.from && v == edge.to) || (u == edge.to && v == edge.from)); if (match) { lines[i] = newWeight ? `${u} ${v} ${newWeight}` : `${u} ${v}`; break; } } } document.getElementById('output').value = lines.join('\n'); renderGraphFromText(); } closeContextMenu(); } }
+
+window.saveNodeLabel = function() {
+    if (contextNodeId !== null) {
+        let node = nodesDataset.get(contextNodeId);
+        nodesDataset.update(getStyleObject(node, { customLabel: document.getElementById('nodeLabelInput').value }));
+        closeContextMenu();
+    }
+}
+window.changeNodeColor = function() {
+    if (contextNodeId !== null) {
+        let node = nodesDataset.get(contextNodeId);
+        nodesDataset.update(getStyleObject(node, { customColor: document.getElementById('nodeColorInput').value }));
+    }
+}
+
+// 高级交互4：保存边权并双向同步到文本框
+window.saveEdgeWeight = function() { 
+    if (contextEdgeId !== null) { 
+        let newWeight = document.getElementById('edgeLabelInput').value.trim(); 
+        let edge = edgesDataset.get(contextEdgeId); 
+        if (edge) { 
+            let lines = document.getElementById('output').value.split('\n'); 
+            let isDirected = document.getElementById('isDirected').value === 'true'; 
+            for (let i = 0; i < lines.length; i++) { 
+                let parts = lines[i].trim().split(/\s+/); 
+                if (parts.length >= 2) { 
+                    let u = String(parts[0]), v = String(parts[1]); 
+                    let match = isDirected ? (u === String(edge.from) && v === String(edge.to)) : ((u === String(edge.from) && v === String(edge.to)) || (u === String(edge.to) && v === String(edge.from))); 
+                    if (match) { lines[i] = newWeight ? `${u} ${v} ${newWeight}` : `${u} ${v}`; break; } 
+                } 
+            } 
+            document.getElementById('output').value = lines.join('\n'); 
+            renderGraphFromText(); 
+        } 
+        closeContextMenu(); 
+    } 
+}
 
 // ====== 数据生成器工具 ======
 function rand(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
@@ -154,11 +242,9 @@ window.generateData = function() {
     const struct = document.getElementById('graphStructure').value, isDirected = (document.getElementById('isDirected').value === 'true'), isWeighted = (document.getElementById('isWeighted').value === 'true');
     if (isNaN(n) || n < 1) n = 10; if (n > 300) { alert("节点数暂时限制在 300 以内。"); n = 300; document.getElementById('n').value = 300; }
     if (isNaN(m) || m < 0) m = n; if (isNaN(maxw) || maxw < 1) maxw = 10;
-    
     let edges = [];
     switch (struct) { case 'tree': edges = getEdges_Tree(n); break; case 'chain': edges = getEdges_Chain(n); break; case 'daisy': edges = getEdges_Daisy(n); break; case 'binary': edges = getEdges_Binary(n); break; case 'graph': edges = getEdges_Graph(n, m, isDirected); break; }
     if (isWeighted) { edges = edges.map(e => [e[0], e[1], rand(1, maxw)]); }
-    
     let out = ""; let generatedNodes = new Set();
     for(let e of edges) { out += e.join(' ') + '\n'; generatedNodes.add(String(e[0])); generatedNodes.add(String(e[1])); }
     for (let i = 1; i <= n; i++) { if (!generatedNodes.has(String(i))) out += i + '\n'; }
