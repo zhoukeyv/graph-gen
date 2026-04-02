@@ -2,48 +2,99 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>算法图论数据生成与可视化</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Graph Editor</title>
+    <!-- 引入 vis-network -->
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
     <link rel="stylesheet" href="style.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js"></script>
 </head>
 <body>
-    <div class="sidebar">
-        <h2>Graph Editor</h2>
-        <div class="form-group"><label>结构类型</label><select id="graphStructure"><option value="tree">随机树 (Tree)</option><option value="chain">链表 (Chain)</option><option value="daisy">菊花图 (Daisy)</option><option value="binary">二叉树 (Binary Tree)</option><option value="graph">普通图 (Graph)</option></select></div>
-        <div class="form-group"><label>节点数 (N)</label><input type="number" id="n" value="10" min="1" max="300"></div>
-        <div class="form-group"><label>边数 (M)</label><input type="number" id="m" value="15" min="0"></div>
-        <div class="form-group"><label>有向图</label><select id="isDirected"><option value="false">无向 (Undirected)</option><option value="true">有向 (Directed)</option></select></div>
-        <div class="form-group"><label>边权</label><select id="isWeighted"><option value="false">无权 (Unweighted)</option><option value="true">有权 (Weighted)</option></select></div>
-        <div class="form-group"><label>最大边权</label><input type="number" id="maxw" value="10" min="1" disabled></div>
-        <button class="btn btn-primary" onclick="generateData()">生成数据</button>
-        <div class="output-container">
-            <textarea id="output" placeholder="生成的文本数据..." oninput="renderGraphFromText()"></textarea>
-            <button class="btn btn-copy" onclick="copyOutput()">复制</button><span id="copyFeedback" class="feedback">已复制！</span>
+    <div class="container">
+        <!-- 左侧面板 -->
+        <div class="sidebar">
+            <h2>Graph Editor</h2>
+            
+            <!-- 可折叠的数据生成器 -->
+            <details class="gen-box">
+                <summary>快速生成图数据</summary>
+                <div class="gen-content">
+                    <div class="form-group">
+                        <label>结构类型</label>
+                        <select id="graphStructure">
+                            <option value="tree">随机树 (Tree)</option>
+                            <option value="chain">链表 (Chain)</option>
+                            <option value="daisy">菊花图 (Daisy)</option>
+                            <option value="binary">二叉树 (Binary Tree)</option>
+                            <option value="graph">普通图 (Graph)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>节点数 (N)</label>
+                        <input type="number" id="n" value="10" min="1" max="300">
+                    </div>
+                    <div class="form-group">
+                        <label>边数 (M)</label>
+                        <input type="number" id="m" value="15" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>有向图</label>
+                        <select id="isDirected">
+                            <option value="false">无向 (Undirected)</option>
+                            <option value="true">有向 (Directed)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>边权</label>
+                        <select id="isWeighted">
+                            <option value="false">无权 (Unweighted)</option>
+                            <option value="true">有权 (Weighted)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>最大边权</label>
+                        <input type="number" id="maxw" value="10" min="1">
+                    </div>
+                    <button class="btn btn-primary" style="width:100%" onclick="generateData()">生成数据</button>
+                </div>
+            </details>
+
+            <!-- 文本与图双向绑定的编辑框 -->
+            <div class="output-container">
+                <textarea id="output" placeholder="直接输入边或节点，支持任意字符：&#10;A B 10&#10;B C 5&#10;Apple Banana&#10;D (这是孤立节点)" oninput="renderGraphFromText()"></textarea>
+                <button class="btn btn-copy" onclick="copyOutput()">复制文本</button>
+                <span id="copyFeedback" class="feedback">已复制！</span>
+            </div>
+        </div>
+
+        <!-- 右侧可视化与工具栏 -->
+        <div class="main-content">
+            <div class="toolbar">
+                <label>边长/间距: <input type="range" id="edgeLength" min="50" max="300" value="100" onchange="forcePhysicsUpdate()"></label>
+                <button class="btn" onclick="forcePhysicsUpdate()">重新布局(弹簧)</button>
+                
+                <!-- 根节点输入框改为 text，支持字符串 -->
+                <label style="margin-left:15px;">根节点: <input type="text" id="treeRootInput" value="1" title="设置树的根节点名称" style="width: 60px; padding:4px;"></label>
+                <button class="btn" onclick="formatAsTree()">树状排版</button>
+            </div>
+            
+            <div id="mynetwork"></div>
         </div>
     </div>
-    <div class="main-content">
-        <div class="toolbar">
-            <div class="tool-group"><label>节点大小:</label><input type="range" id="nodeSize" value="20" min="10" max="50" onchange="updateNodeSize(this.value)"></div>
-            <div class="tool-group"><label>边长(弹簧):</label><input type="range" id="edgeLength" value="100" min="30" max="300" onchange="updateEdgeLength(this.value)"></div>
-            <div class="divider"></div>
-            <button class="btn" onclick="pinAll()">固定所有</button>
-            <button class="btn" onclick="unpinAll()">全部解除固定</button>
-            <div class="divider"></div>
-            <div class="tree-layout-box"><button class="btn-tree" onclick="formatAsTree()">树状排版</button><div class="tree-input-wrapper"><span class="tree-label">根:</span><input type="number" id="treeRootInput" value="1" min="1" title="设置树的根节点编号"></div></div>
-        </div>
-        <div id="mynetwork"></div>
-    </div>
-    <div id="contextMenu" class="context-menu">
-        <label>修改标签:</label><input type="text" id="nodeLabelInput" onkeydown="if(event.key==='Enter') saveNodeConfig()">
-        <label>选择颜色 (或快捷键):</label>
-        <div class="color-picker">
-            <div class="color-swatch" style="background:#e63946" onclick="selectColor('#e63946')" title="R键"></div><div class="color-swatch" style="background:#4e6ef2" onclick="selectColor('#4e6ef2')" title="B键"></div><div class="color-swatch" style="background:#2a9d8f" onclick="selectColor('#2a9d8f')" title="G键"></div><div class="color-swatch" style="background:#f4a261" onclick="selectColor('#f4a261')" title="Y键"></div><div class="color-swatch" style="background:#9d4edd" onclick="selectColor('#9d4edd')" title="P键"></div><div class="color-swatch" style="background:#333333" onclick="selectColor('#333333')" title="D键"></div>
-        </div>
-        <input type="hidden" id="nodeColorInput"><button class="btn btn-primary" style="margin-top:8px;width:100%" onclick="saveNodeConfig()">保存 (Enter)</button>
+
+    <!-- 右键上下文菜单 -->
+    <div id="nodeContextMenu" class="context-menu">
+        <div class="menu-item" onclick="deleteNode()">删除该节点 (及其连边)</div>
+        <div class="menu-item" id="pinMenuBtn" onclick="pinNode()">固定/取消固定位置</div>
     </div>
     <div id="edgeContextMenu" class="context-menu">
-        <label>修改边权/标签:</label><input type="text" id="edgeLabelInput" onkeydown="if(event.key==='Enter') saveEdgeConfig()"><button class="btn btn-primary" style="margin-top:8px;width:100%" onclick="saveEdgeConfig()">保存 (Enter)</button>
+        <div style="padding: 8px 12px; border-bottom: 1px solid #eee;">
+            <label style="font-size: 12px; color: #666;">修改边权:</label>
+            <input type="text" id="edgeLabelInput" style="width: 100%; margin-top: 4px; padding: 4px; box-sizing: border-box;">
+            <button class="btn btn-primary" style="width: 100%; margin-top: 6px; padding: 4px;" onclick="saveEdgeConfig()">保存边权</button>
+        </div>
+        <div class="menu-item" onclick="deleteEdge()" style="color: #dc3545;">删除该边</div>
     </div>
+
     <script src="script.js"></script>
 </body>
 </html>
