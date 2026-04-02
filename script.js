@@ -15,12 +15,8 @@ function getEdges_Tree(n) {
     for (let i = 0; i < n - 2; i++) { let u = leaves.shift(), v = sequence[i]; edges.push([u, v]); if (--degree[v] === 1) insertSorted(leaves, v); }
     edges.push([leaves[0], leaves[1]]); return edges;
 }
-function getEdges_Chain(n) {
-    let edges = []; for (let i = 1; i < n; i++) edges.push([i, i + 1]); return edges;
-}
-function getEdges_Daisy(n) {
-    let edges = []; for (let i = 2; i <= n; i++) edges.push([1, i]); return edges;
-}
+function getEdges_Chain(n) { let edges = []; for (let i = 1; i < n; i++) edges.push([i, i + 1]); return edges; }
+function getEdges_Daisy(n) { let edges = []; for (let i = 2; i <= n; i++) edges.push([1, i]); return edges; }
 function getEdges_Binary(n) {
     let edges = [];
     for (let i = 1; i <= n; i++) { if (i * 2 <= n) edges.push([i, i * 2]); if (i * 2 + 1 <= n) edges.push([i, i * 2 + 1]); }
@@ -55,12 +51,11 @@ let network = null;
 let contextNodeId = null;
 let contextEdgeId = null;
 
-// 【调优1】物理引擎参数：更重的质量、更高的阻尼、微弱向心力
 const PHYSICS_CONFIG = {
-    gravitationalConstant: -60, // 适度斥力
-    centralGravity: 0.005,      // 极其微弱的向心力，既不挤成一团，也不让孤点飞到屏幕外
-    springConstant: 0.04,       // 弹簧较软，缓冲更好
-    damping: 0.90,              // 高阻尼(空气阻力)，节点运动更沉稳不乱飘
+    gravitationalConstant: -60,
+    centralGravity: 0.005, 
+    springConstant: 0.04, 
+    damping: 0.90, 
     avoidOverlap: 0.5 
 };
 
@@ -69,11 +64,7 @@ window.forcePhysicsUpdate = function() {
     const currentEdgeLen = parseInt(document.getElementById('edgeLength').value) || 100;
     network.setOptions({
         edges: { smooth: { type: 'continuous' } }, 
-        physics: {
-            enabled: true,
-            solver: 'forceAtlas2Based',
-            forceAtlas2Based: Object.assign({}, PHYSICS_CONFIG, { springLength: currentEdgeLen })
-        }
+        physics: { enabled: true, solver: 'forceAtlas2Based', forceAtlas2Based: Object.assign({}, PHYSICS_CONFIG, { springLength: currentEdgeLen }) }
     });
     network.startSimulation();
 }
@@ -114,7 +105,6 @@ function initNetwork() {
     const initEdgeLength = parseInt(document.getElementById('edgeLength').value);
 
     const options = {
-        // 增加 mass=4，让节点像台球一样重，不会被轻易大幅度弹飞
         nodes: { shape: 'circle', mass: 4.0, borderWidth: 2, borderWidthSelected: 2, font: { color: '#333', size: initNodeSize, face: 'system-ui' }, shadow: true },
         edges: { color: { color: '#999', highlight: '#4e6ef2' }, width: 2, font: { size: 14, align: 'top', background: '#ffffff', strokeWidth: 3, strokeColor: '#ffffff' }, smooth: { type: 'continuous' }, arrows: { to: { enabled: false, scaleFactor: 0.8 } } },
         physics: { enabled: true, solver: 'forceAtlas2Based', forceAtlas2Based: Object.assign({}, PHYSICS_CONFIG, { springLength: initEdgeLength }), stabilization: { iterations: 150 } },
@@ -257,25 +247,21 @@ window.unpinAll = function() { if(!nodesDataset) return; nodesDataset.update(nod
 window.formatAsTree = function() {
     if (!network || !nodesDataset) return;
     
-    // 【调优3】由用户指定根节点，使用纯 BFS 算法强制推算层级！
-    let rootInput = prompt("请指定树结构排版的【根节点编号】:", "1");
-    if (rootInput === null) return; // 用户取消
-    
+    // 【核心修复】直接从输入框无缝读取数值
+    let rootInput = document.getElementById('treeRootInput').value;
     let rootId = parseInt(rootInput);
     if (isNaN(rootId) || !nodesDataset.get(rootId)) {
-        alert("图内未找到该节点编号，请检查后重试！");
+        alert(`图内未找到节点 [${rootInput}]，请检查后重试！`);
         return;
     }
 
-    // 构建邻接表
     let adj = {};
     nodesDataset.getIds().forEach(id => adj[id] = []);
     edgesDataset.get().forEach(e => {
         adj[e.from].push(e.to);
-        adj[e.to].push(e.from); // 当作无向图建立双向边
+        adj[e.to].push(e.from);
     });
 
-    // BFS 广度优先搜索分配 level
     let levels = {};
     let q = [rootId];
     levels[rootId] = 0;
@@ -290,10 +276,7 @@ window.formatAsTree = function() {
         }
     }
 
-    // 把算好的 level 注入到节点数据中，vis-network 会自动使用
-    let levelUpdates = nodesDataset.get().map(n => {
-        return { id: n.id, level: levels[n.id] !== undefined ? levels[n.id] : 0 };
-    });
+    let levelUpdates = nodesDataset.get().map(n => { return { id: n.id, level: levels[n.id] !== undefined ? levels[n.id] : 0 }; });
     nodesDataset.update(levelUpdates);
 
     const currentEdgeLen = parseInt(document.getElementById('edgeLength').value) || 100;
