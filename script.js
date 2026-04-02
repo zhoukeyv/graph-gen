@@ -8,12 +8,12 @@ function getEdges_Graph(n, m, isDirected) { let set = new Set(), edges = []; let
 function darkenHex(hex, factor = 0.2) { if (!hex || !hex.startsWith('#')) return hex; let r = parseInt(hex.substring(1, 3), 16), g = parseInt(hex.substring(3, 5), 16), b = parseInt(hex.substring(5, 7), 16); r = Math.max(0, Math.floor(r * (1 - factor))); g = Math.max(0, Math.floor(g * (1 - factor))); b = Math.max(0, Math.floor(b * (1 - factor))); return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1); }
 
 let nodesDataset = null, edgesDataset = null, network = null, contextNodeId = null, contextEdgeId = null;
-const PHYSICS_CONFIG = { gravitationalConstant: -40, centralGravity: 0.01, springConstant: 0.08, damping: 0.8 };
+const PHYSICS_CONFIG = { gravitationalConstant: -40, centralGravity: 0.01, springConstant: 0.08, damping: 0.6 };
 
 window.forcePhysicsUpdate = function() {
     if (!network) return;
     const currentEdgeLen = parseInt(document.getElementById('edgeLength').value) || 100;
-    network.setOptions({ edges: { smooth: { type: 'continuous' } }, physics: { enabled: true, solver: 'forceAtlas2Based', forceAtlas2Based: Object.assign({}, PHYSICS_CONFIG, { springLength: currentEdgeLen }) } });
+    network.setOptions({ edges: { smooth: false }, physics: { enabled: true, solver: 'forceAtlas2Based', forceAtlas2Based: Object.assign({}, PHYSICS_CONFIG, { springLength: currentEdgeLen }) } });
     network.startSimulation();
 }
 
@@ -34,7 +34,7 @@ function initNetwork() {
     const initNodeSize = parseInt(document.getElementById('nodeSize').value), initEdgeLength = parseInt(document.getElementById('edgeLength').value);
     const options = {
         nodes: { shape: 'circle', mass: 4.0, borderWidth: 2, borderWidthSelected: 2, font: { color: '#333', size: initNodeSize, face: 'Arial, sans-serif' }, shadow: true },
-        edges: { color: { color: '#999', highlight: '#4e6ef2' }, width: 2, font: { size: 14, align: 'top', background: '#ffffff', strokeWidth: 3, strokeColor: '#ffffff' }, smooth: { type: 'continuous' }, arrows: { to: { enabled: false, scaleFactor: 0.8 } } },
+        edges: { color: { color: '#999', highlight: '#4e6ef2' }, width: 2, font: { size: 14, align: 'top', background: '#ffffff', strokeWidth: 3, strokeColor: '#ffffff' }, smooth: false, arrows: { to: { enabled: false, scaleFactor: 0.8 } } },
         physics: { enabled: true, solver: 'forceAtlas2Based', forceAtlas2Based: Object.assign({}, PHYSICS_CONFIG, { springLength: initEdgeLength }), stabilization: { iterations: 150 } },
         interaction: { hover: true, tooltipDelay: 200, multiselect: true }
     };
@@ -85,7 +85,7 @@ window.formatAsTree = function() {
     edgesDataset.get().forEach(e => { adj[e.from].push(e.to); adj[e.to].push(e.from); });
     let levels = {}, q = [rootId]; levels[rootId] = 0;
     while (q.length > 0) { let curr = q.shift(); for (let nbr of adj[curr]) { if (levels[nbr] === undefined) { levels[nbr] = levels[curr] + 1; q.push(nbr); } } }
-    nodesDataset.update(nodesDataset.get().map(n => { return { id: n.id, level: levels[n.id] !== undefined ? levels[n.id] : 0 }; }));
+    nodesDataset。update(nodesDataset.get().map(n => { return { id: n.id, level: levels[n.id] !== undefined ? levels[n.id] : 0 }; }));
     const currentEdgeLen = parseInt(document.getElementById('edgeLength').value) || 100;
     network.setOptions({ layout: { hierarchical: { enabled: true, direction: 'UD', sortMethod: 'directed', nodeSpacing: currentEdgeLen * 1.2, levelSeparation: currentEdgeLen * 1.0 } }, physics: { enabled: false } });
     setTimeout(() => { let positions = network.getPositions(); network.setOptions({ layout: { hierarchical: { enabled: false } } }); nodesDataset.update(nodesDataset.get().map(node => { let style = getStyleObject(node, { isPinned: true }); if (positions[node.id]) { style.x = positions[node.id].x; style.y = positions[node.id].y; } return style; })); window.forcePhysicsUpdate(); network.fit({ animation: { duration: 600 } }); }, 50);
