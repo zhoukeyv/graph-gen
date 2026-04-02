@@ -1,4 +1,3 @@
-// ==================== 1. 数据结构生成算法 ====================
 function rand(l, r) { return Math.floor(Math.random() * (r - l + 1)) + l; }
 function insertSorted(arr, val) {
     let low = 0, high = arr.length - 1;
@@ -43,21 +42,18 @@ function darkenHex(hex, factor = 0.2) {
     return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
 }
 
-// ==================== 2. 全局状态与网络图核心 ====================
-
 let nodesDataset = null;
 let edgesDataset = null;
 let network = null;
 let contextNodeId = null;
 let contextEdgeId = null;
 
-// 【核心修复】重新平衡物理受力模型
+// 修复点：移除了会导致底层渲染崩溃的 avoidOverlap 参数
 const PHYSICS_CONFIG = {
-    gravitationalConstant: -40, // 减弱节点间的斥力，避免把边无限撑开
-    centralGravity: 0.01,       // 恢复合理的向心力，温和地往屏幕中心收拢
-    springConstant: 0.08,       // 加强弹簧拉力！严格限制边长，让它紧跟你的滑动条
-    damping: 0.90,              // 保持高阻尼(空气阻力)，拖拽手感依然沉稳
-    avoidOverlap: 0.5 
+    gravitationalConstant: -40, 
+    centralGravity: 0.01,       
+    springConstant: 0.08,       
+    damping: 0.8 
 };
 
 window.forcePhysicsUpdate = function() {
@@ -106,7 +102,7 @@ function initNetwork() {
     const initEdgeLength = parseInt(document.getElementById('edgeLength').value);
 
     const options = {
-        nodes: { shape: 'circle', mass: 4.0, borderWidth: 2, borderWidthSelected: 2, font: { color: '#333', size: initNodeSize, face: 'system-ui' }, shadow: true },
+        nodes: { shape: 'circle', mass: 4.0, borderWidth: 2, borderWidthSelected: 2, font: { color: '#333', size: initNodeSize, face: 'Arial, sans-serif' }, shadow: true },
         edges: { color: { color: '#999', highlight: '#4e6ef2' }, width: 2, font: { size: 14, align: 'top', background: '#ffffff', strokeWidth: 3, strokeColor: '#ffffff' }, smooth: { type: 'continuous' }, arrows: { to: { enabled: false, scaleFactor: 0.8 } } },
         physics: { enabled: true, solver: 'forceAtlas2Based', forceAtlas2Based: Object.assign({}, PHYSICS_CONFIG, { springLength: initEdgeLength }), stabilization: { iterations: 150 } },
         interaction: { hover: true, tooltipDelay: 200, multiselect: true }
@@ -174,8 +170,6 @@ function initNetwork() {
     network.on("zoom", closeContextMenu);
 }
 
-// ==================== 3. 文本更新与核心物理修复 ====================
-
 window.renderGraphFromText = function() {
     if (!nodesDataset || !edgesDataset) return;
     
@@ -212,8 +206,6 @@ window.renderGraphFromText = function() {
 
     setTimeout(() => { window.forcePhysicsUpdate(); }, 10);
 }
-
-// ==================== 4. 面板控制、快捷键与 BFS树排版 ====================
 
 document.addEventListener('keydown', e => {
     if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
@@ -341,8 +333,6 @@ window.saveEdgeConfig = function() {
     }
 }
 
-// ==================== 5. 下拉联动与生成 ====================
-
 window.updateInputs = function() {
     const n = parseInt(document.getElementById('n').value);
     const mInput = document.getElementById('m'), maxwInput = document.getElementById('maxw');
@@ -392,13 +382,28 @@ window.copyOutput = function() {
     });
 }
 
-// ==================== 6. 初始化 ====================
+// 确保 DOM 加载完、且 vis 网络库就绪后，按照正确顺序初始化
 document.addEventListener('DOMContentLoaded', () => {
     try {
-        ['graphStructure', 'isDirected', 'isWeighted'].forEach(id => { document.getElementById(id).addEventListener('change', () => { updateInputs(); generateData(); }); });
-        document.getElementById('n').addEventListener('change', updateInputs);
-        updateInputs(); initNetwork(); generateData(); 
+        if (typeof vis === 'undefined') {
+            alert('网络库加载失败，请检查网络或更换 CDN。');
+            return;
+        }
+        
+        // 核心修复点：优先初始化 network 和数据集，再绑定事件并生成数据
+        initNetwork(); 
+        
+        ['graphStructure', 'isDirected', 'isWeighted'].forEach(id => { 
+            const el = document.getElementById(id);
+            if(el) el.addEventListener('change', () => { updateInputs(); generateData(); }); 
+        });
+        const elN = document.getElementById('n');
+        if(elN) elN.addEventListener('change', updateInputs);
+        
+        updateInputs(); 
+        generateData(); 
     } catch (error) {
-        console.error(error); alert("加载失败，请按 Ctrl + F5。\n错误: " + error.message);
+        console.error(error); 
+        alert("初始化失败: " + error.message);
     }
 });
