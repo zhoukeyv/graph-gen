@@ -40,6 +40,18 @@ function getEdges_Graph(n, m, isDirected) {
     return edges;
 }
 
+// 颜色加深算法：将十六进制颜色按比例变暗
+function darkenHex(hex, factor = 0.2) {
+    if (!hex || !hex.startsWith('#')) return hex;
+    let r = parseInt(hex.substring(1, 3), 16);
+    let g = parseInt(hex.substring(3, 5), 16);
+    let b = parseInt(hex.substring(5, 7), 16);
+    r = Math.max(0, Math.floor(r * (1 - factor)));
+    g = Math.max(0, Math.floor(g * (1 - factor)));
+    b = Math.max(0, Math.floor(b * (1 - factor)));
+    return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+}
+
 // ==================== 2. 全局状态与网络图核心 ====================
 
 let nodesDataset = null;
@@ -68,11 +80,20 @@ function getStyleObject(node, updates) {
     let customBorder = updates.customColor !== undefined ? updates.customColor : (node.customColor || '#4e6ef2');
     let label = updates.label !== undefined ? updates.label : (node.label || '');
 
+    // 【核心修复】计算悬停状态的颜色：原有颜色加深 20%
+    let hoverBorder = darkenHex(customBorder, 0.2); 
+
     return {
         id: node.id || updates.id, label: label, isPinned: isPinned, customColor: customBorder, 
         fixed: isPinned ? { x: true, y: true } : { x: false, y: false },
         borderWidth: isPinned ? 4 : 2, borderWidthSelected: isPinned ? 4 : 2,
-        color: { background: isPinned ? '#f3f4f6' : '#ffffff', border: customBorder, highlight: { background: isPinned ? '#e5e7eb' : '#f0f4ff', border: customBorder } },
+        color: { 
+            background: isPinned ? '#f3f4f6' : '#ffffff', 
+            border: customBorder, 
+            highlight: { background: isPinned ? '#e5e7eb' : '#f0f4ff', border: customBorder },
+            // 显式指定悬停颜色，打破默认蓝色的诅咒
+            hover: { background: isPinned ? '#e5e7eb' : '#f8f9fa', border: hoverBorder } 
+        },
         shadow: isPinned ? { enabled: true, color: 'rgba(0,0,0,0.3)', size: 8, x: 2, y: 2 } : true
     };
 }
@@ -104,10 +125,7 @@ function initNetwork() {
     network.on("click", function (params) {
         if (params.event.srcEvent.shiftKey && params.nodes.length > 0) {
             updateNodeStyle(params.nodes[0], { isPinned: !nodesDataset.get(params.nodes[0]).isPinned });
-            
-            // 【修复1】强制取消选中状态！这样 Shift+点击 就真的只有“固定”效果了
             network.unselectAll(); 
-            
             window.forcePhysicsUpdate(); 
             closeContextMenu(); return;
         }
@@ -205,13 +223,10 @@ window.renderGraphFromText = function() {
 
 // ==================== 4. 快捷键与面板控制 ====================
 
-// 【修复2】彻底重构快捷键逻辑！只要有节点被选中，直接敲击字母即可。100%触发！
 document.addEventListener('keydown', e => {
-    // 如果焦点在左侧文本框、或者右键菜单的输入框里，不要触发快捷键
     if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
 
     let color = null;
-    // 直接判定字母键 (R=红, G=绿, B=蓝, Y=黄, P=紫, D=黑)
     if (e.code === 'KeyR') color = '#e63946';
     else if (e.code === 'KeyB') color = '#4e6ef2';
     else if (e.code === 'KeyG') color = '#2a9d8f';
@@ -226,7 +241,6 @@ document.addEventListener('keydown', e => {
             let updates = selectedNodes.map(id => {
                 let node = nodesDataset.get(id);
                 let currentColor = node.customColor || '#4e6ef2';
-                // 如果当前已经是这个颜色了，再按一次恢复成蓝色
                 let newColor = (currentColor === color) ? '#4e6ef2' : color;
                 return getStyleObject(node, { customColor: newColor });
             });
