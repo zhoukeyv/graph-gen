@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Graph Editor</title>
-    <!-- 引入 vis-network -->
-    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <!-- 更换为更稳定的 cdnjs，防止加载卡死 -->
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/standalone/umd/vis-network.min.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -14,7 +14,6 @@
         <div class="sidebar">
             <h2>Graph Editor</h2>
             
-            <!-- 可折叠的数据生成器 -->
             <details class="gen-box">
                 <summary>快速生成图数据</summary>
                 <div class="gen-content">
@@ -28,39 +27,23 @@
                             <option value="graph">普通图 (Graph)</option>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label>节点数 (N)</label>
-                        <input type="number" id="n" value="10" min="1" max="300">
-                    </div>
-                    <div class="form-group">
-                        <label>边数 (M)</label>
-                        <input type="number" id="m" value="15" min="0">
-                    </div>
-                    <div class="form-group">
-                        <label>有向图</label>
-                        <select id="isDirected">
-                            <option value="false">无向 (Undirected)</option>
-                            <option value="true">有向 (Directed)</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>边权</label>
-                        <select id="isWeighted">
-                            <option value="false">无权 (Unweighted)</option>
-                            <option value="true">有权 (Weighted)</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>最大边权</label>
-                        <input type="number" id="maxw" value="10" min="1">
-                    </div>
+                    <div class="form-group"><label>节点数 (N)</label><input type="number" id="n" value="10" min="1" max="300"></div>
+                    <div class="form-group"><label>边数 (M)</label><input type="number" id="m" value="15" min="0"></div>
+                    <div class="form-group"><label>有向图</label><select id="isDirected"><option value="false">无向 (Undirected)</option><option value="true">有向 (Directed)</option></select></div>
+                    <div class="form-group"><label>边权</label><select id="isWeighted"><option value="false">无权 (Unweighted)</option><option value="true">有权 (Weighted)</option></select></div>
+                    <div class="form-group"><label>最大边权</label><input type="number" id="maxw" value="10" min="1"></div>
                     <button class="btn btn-primary" style="width:100%" onclick="generateData()">生成数据</button>
                 </div>
             </details>
 
-            <!-- 文本与图双向绑定的编辑框 -->
+            <!-- 填入真实的默认文本，避免一上来是空图 -->
             <div class="output-container">
-                <textarea id="output" placeholder="直接输入边或节点，支持任意字符：&#10;A B 10&#10;B C 5&#10;Apple Banana&#10;D (这是孤立节点)" oninput="renderGraphFromText()"></textarea>
+                <textarea id="output" placeholder="直接输入边或节点，支持任意字符：&#10;A B 10&#10;D (孤立节点)" oninput="renderGraphFromText()">
+A B 10
+B C 5
+Apple Banana 99
+D
+</textarea>
                 <button class="btn btn-copy" onclick="copyOutput()">复制文本</button>
                 <span id="copyFeedback" class="feedback">已复制！</span>
             </div>
@@ -71,12 +54,9 @@
             <div class="toolbar">
                 <label>边长/间距: <input type="range" id="edgeLength" min="50" max="300" value="100" onchange="forcePhysicsUpdate()"></label>
                 <button class="btn" onclick="forcePhysicsUpdate()">重新布局(弹簧)</button>
-                
-                <!-- 根节点输入框改为 text，支持字符串 -->
-                <label style="margin-left:15px;">根节点: <input type="text" id="treeRootInput" value="1" title="设置树的根节点名称" style="width: 60px; padding:4px;"></label>
+                <label style="margin-left:15px;">根节点: <input type="text" id="treeRootInput" value="A" title="设置树的根节点名称" style="width: 60px; padding:4px;"></label>
                 <button class="btn" onclick="formatAsTree()">树状排版</button>
             </div>
-            
             <div id="mynetwork"></div>
         </div>
     </div>
