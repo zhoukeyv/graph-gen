@@ -3,12 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <title>算法图论数据生成与可视化</title>
-    <!-- 注意这里的 CSS 文件名是 style.css -->
     <link rel="stylesheet" href="style.css">
-    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <!-- 替换为全球最稳的 cdnjs 确保 GitHub Pages 秒开 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js"></script>
 </head>
 <body>
-    <!-- 左侧控制面板 -->
     <div class="sidebar">
         <h2>图数据生成器</h2>
         <div class="form-group">
@@ -56,7 +55,6 @@
         </div>
     </div>
 
-    <!-- 右侧可视化区域 -->
     <div class="main-content">
         <div class="toolbar">
             <div class="tool-group">
@@ -75,7 +73,6 @@
             
             <div class="divider"></div>
             
-            <!-- 树状排版与根节点输入组合 -->
             <div class="tree-layout-box">
                 <button class="btn-tree" onclick="formatAsTree()">🌳 树状排版</button>
                 <div class="tree-input-wrapper">
@@ -88,7 +85,7 @@
         <div id="mynetwork"></div>
     </div>
 
-    <!-- 右键菜单：节点 -->
+    <!-- 右键菜单 -->
     <div id="contextMenu" class="context-menu">
         <label>修改标签:</label>
         <input type="text" id="nodeLabelInput" onkeydown="if(event.key==='Enter') saveNodeConfig()">
@@ -105,7 +102,6 @@
         <button class="btn btn-primary" style="margin-top:8px;width:100%" onclick="saveNodeConfig()">保存 (Enter)</button>
     </div>
 
-    <!-- 右键菜单：边 -->
     <div id="edgeContextMenu" class="context-menu">
         <label>修改边权/标签:</label>
         <input type="text" id="edgeLabelInput" onkeydown="if(event.key==='Enter') saveEdgeConfig()">
