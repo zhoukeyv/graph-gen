@@ -51,11 +51,12 @@ let network = null;
 let contextNodeId = null;
 let contextEdgeId = null;
 
+// 【核心修复】重新平衡物理受力模型
 const PHYSICS_CONFIG = {
-    gravitationalConstant: -60,
-    centralGravity: 0.005, 
-    springConstant: 0.04, 
-    damping: 0.90, 
+    gravitationalConstant: -40, // 减弱节点间的斥力，避免把边无限撑开
+    centralGravity: 0.01,       // 恢复合理的向心力，温和地往屏幕中心收拢
+    springConstant: 0.08,       // 加强弹簧拉力！严格限制边长，让它紧跟你的滑动条
+    damping: 0.90,              // 保持高阻尼(空气阻力)，拖拽手感依然沉稳
     avoidOverlap: 0.5 
 };
 
@@ -247,7 +248,6 @@ window.unpinAll = function() { if(!nodesDataset) return; nodesDataset.update(nod
 window.formatAsTree = function() {
     if (!network || !nodesDataset) return;
     
-    // 【核心修复】直接从输入框无缝读取数值
     let rootInput = document.getElementById('treeRootInput').value;
     let rootId = parseInt(rootInput);
     if (isNaN(rootId) || !nodesDataset.get(rootId)) {
