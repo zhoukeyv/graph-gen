@@ -36,3 +36,10 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; display: flex; height: 10
 .color-picker { display: flex; gap: 8px; flex-wrap: wrap; }
 .color-swatch { width: 24px; height: 24px; border-radius: 6px; cursor: pointer; transition: transform 0.1s; border: 1px solid rgba(0,0,0,0.1); }
 .color-swatch:hover { transform: scale(1.15); }
+#mynetwork:focus,
+#mynetwork *:focus,
+.vis-network:focus,
+.vis-network canvas:focus {
+    outline: none !important;
+    box-shadow: none !important;
+}
