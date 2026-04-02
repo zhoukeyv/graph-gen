@@ -18,7 +18,7 @@
         <button class="btn btn-primary" onclick="generateData()">生成数据</button>
         <div class="output-container">
             <textarea id="output" placeholder="生成的文本数据..." oninput="renderGraphFromText()"></textarea>
-            <button class="btn btn-copy" onclick="copyOutput()">📋 复制</button><span id="copyFeedback" class="feedback">已复制！</span>
+            <button class="btn btn-copy" onclick="copyOutput()">复制</button><span id="copyFeedback" class="feedback">已复制！</span>
         </div>
     </div>
     <div class="main-content">
@@ -29,7 +29,7 @@
             <button class="btn" onclick="pinAll()">固定所有</button>
             <button class="btn" onclick="unpinAll()">全部解除固定</button>
             <div class="divider"></div>
-            <div class="tree-layout-box"><button class="btn-tree" onclick="formatAsTree()">🌳 树状排版</button><div class="tree-input-wrapper"><span class="tree-label">根:</span><input type="number" id="treeRootInput" value="1" min="1" title="设置树的根节点编号"></div></div>
+            <div class="tree-layout-box"><button class="btn-tree" onclick="formatAsTree()">树状排版</button><div class="tree-input-wrapper"><span class="tree-label">根:</span><input type="number" id="treeRootInput" value="1" min="1" title="设置树的根节点编号"></div></div>
         </div>
         <div id="mynetwork"></div>
     </div>
