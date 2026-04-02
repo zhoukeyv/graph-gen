@@ -40,15 +40,10 @@ function getEdges_Graph(n, m, isDirected) {
     return edges;
 }
 
-// 颜色加深算法：将十六进制颜色按比例变暗
 function darkenHex(hex, factor = 0.2) {
     if (!hex || !hex.startsWith('#')) return hex;
-    let r = parseInt(hex.substring(1, 3), 16);
-    let g = parseInt(hex.substring(3, 5), 16);
-    let b = parseInt(hex.substring(5, 7), 16);
-    r = Math.max(0, Math.floor(r * (1 - factor)));
-    g = Math.max(0, Math.floor(g * (1 - factor)));
-    b = Math.max(0, Math.floor(b * (1 - factor)));
+    let r = parseInt(hex.substring(1, 3), 16), g = parseInt(hex.substring(3, 5), 16), b = parseInt(hex.substring(5, 7), 16);
+    r = Math.max(0, Math.floor(r * (1 - factor))); g = Math.max(0, Math.floor(g * (1 - factor))); b = Math.max(0, Math.floor(b * (1 - factor)));
     return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
 }
 
@@ -60,6 +55,15 @@ let network = null;
 let contextNodeId = null;
 let contextEdgeId = null;
 
+// 【调优1】物理引擎参数：更重的质量、更高的阻尼、微弱向心力
+const PHYSICS_CONFIG = {
+    gravitationalConstant: -60, // 适度斥力
+    centralGravity: 0.005,      // 极其微弱的向心力，既不挤成一团，也不让孤点飞到屏幕外
+    springConstant: 0.04,       // 弹簧较软，缓冲更好
+    damping: 0.90,              // 高阻尼(空气阻力)，节点运动更沉稳不乱飘
+    avoidOverlap: 0.5 
+};
+
 window.forcePhysicsUpdate = function() {
     if (!network) return;
     const currentEdgeLen = parseInt(document.getElementById('edgeLength').value) || 100;
@@ -68,7 +72,7 @@ window.forcePhysicsUpdate = function() {
         physics: {
             enabled: true,
             solver: 'forceAtlas2Based',
-            forceAtlas2Based: { springLength: currentEdgeLen } 
+            forceAtlas2Based: Object.assign({}, PHYSICS_CONFIG, { springLength: currentEdgeLen })
         }
     });
     network.startSimulation();
@@ -79,8 +83,6 @@ function getStyleObject(node, updates) {
     let isPinned = updates.isPinned !== undefined ? updates.isPinned : (node.isPinned || false);
     let customBorder = updates.customColor !== undefined ? updates.customColor : (node.customColor || '#4e6ef2');
     let label = updates.label !== undefined ? updates.label : (node.label || '');
-
-    // 【核心修复】计算悬停状态的颜色：原有颜色加深 20%
     let hoverBorder = darkenHex(customBorder, 0.2); 
 
     return {
@@ -88,10 +90,8 @@ function getStyleObject(node, updates) {
         fixed: isPinned ? { x: true, y: true } : { x: false, y: false },
         borderWidth: isPinned ? 4 : 2, borderWidthSelected: isPinned ? 4 : 2,
         color: { 
-            background: isPinned ? '#f3f4f6' : '#ffffff', 
-            border: customBorder, 
+            background: isPinned ? '#f3f4f6' : '#ffffff', border: customBorder, 
             highlight: { background: isPinned ? '#e5e7eb' : '#f0f4ff', border: customBorder },
-            // 显式指定悬停颜色，打破默认蓝色的诅咒
             hover: { background: isPinned ? '#e5e7eb' : '#f8f9fa', border: hoverBorder } 
         },
         shadow: isPinned ? { enabled: true, color: 'rgba(0,0,0,0.3)', size: 8, x: 2, y: 2 } : true
@@ -114,9 +114,10 @@ function initNetwork() {
     const initEdgeLength = parseInt(document.getElementById('edgeLength').value);
 
     const options = {
-        nodes: { shape: 'circle', mass: 2.5, borderWidth: 2, borderWidthSelected: 2, font: { color: '#333', size: initNodeSize, face: 'system-ui' }, shadow: true },
+        // 增加 mass=4，让节点像台球一样重，不会被轻易大幅度弹飞
+        nodes: { shape: 'circle', mass: 4.0, borderWidth: 2, borderWidthSelected: 2, font: { color: '#333', size: initNodeSize, face: 'system-ui' }, shadow: true },
         edges: { color: { color: '#999', highlight: '#4e6ef2' }, width: 2, font: { size: 14, align: 'top', background: '#ffffff', strokeWidth: 3, strokeColor: '#ffffff' }, smooth: { type: 'continuous' }, arrows: { to: { enabled: false, scaleFactor: 0.8 } } },
-        physics: { enabled: true, solver: 'forceAtlas2Based', forceAtlas2Based: { gravitationalConstant: -50, centralGravity: 0.01, springConstant: 0.06, springLength: initEdgeLength, damping: 0.75, avoidOverlap: 0.5 }, stabilization: { iterations: 150 } },
+        physics: { enabled: true, solver: 'forceAtlas2Based', forceAtlas2Based: Object.assign({}, PHYSICS_CONFIG, { springLength: initEdgeLength }), stabilization: { iterations: 150 } },
         interaction: { hover: true, tooltipDelay: 200, multiselect: true }
     };
 
@@ -221,11 +222,10 @@ window.renderGraphFromText = function() {
     setTimeout(() => { window.forcePhysicsUpdate(); }, 10);
 }
 
-// ==================== 4. 快捷键与面板控制 ====================
+// ==================== 4. 面板控制、快捷键与 BFS树排版 ====================
 
 document.addEventListener('keydown', e => {
     if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
-
     let color = null;
     if (e.code === 'KeyR') color = '#e63946';
     else if (e.code === 'KeyB') color = '#4e6ef2';
@@ -252,19 +252,54 @@ document.addEventListener('keydown', e => {
 window.updateNodeSize = function(val) { if(network) { network.setOptions({ nodes: { font: { size: parseInt(val) } } }); } }
 window.updateEdgeLength = function(val) { window.forcePhysicsUpdate(); }
 window.pinAll = function() { if(!nodesDataset) return; nodesDataset.update(nodesDataset.get().map(node => getStyleObject(node, { isPinned: true }))); }
-
-window.unpinAll = function() { 
-    if(!nodesDataset) return; 
-    nodesDataset.update(nodesDataset.get().map(node => getStyleObject(node, { isPinned: false }))); 
-    window.forcePhysicsUpdate(); 
-}
+window.unpinAll = function() { if(!nodesDataset) return; nodesDataset.update(nodesDataset.get().map(node => getStyleObject(node, { isPinned: false }))); window.forcePhysicsUpdate(); }
 
 window.formatAsTree = function() {
     if (!network || !nodesDataset) return;
+    
+    // 【调优3】由用户指定根节点，使用纯 BFS 算法强制推算层级！
+    let rootInput = prompt("请指定树结构排版的【根节点编号】:", "1");
+    if (rootInput === null) return; // 用户取消
+    
+    let rootId = parseInt(rootInput);
+    if (isNaN(rootId) || !nodesDataset.get(rootId)) {
+        alert("图内未找到该节点编号，请检查后重试！");
+        return;
+    }
+
+    // 构建邻接表
+    let adj = {};
+    nodesDataset.getIds().forEach(id => adj[id] = []);
+    edgesDataset.get().forEach(e => {
+        adj[e.from].push(e.to);
+        adj[e.to].push(e.from); // 当作无向图建立双向边
+    });
+
+    // BFS 广度优先搜索分配 level
+    let levels = {};
+    let q = [rootId];
+    levels[rootId] = 0;
+
+    while (q.length > 0) {
+        let curr = q.shift();
+        for (let nbr of adj[curr]) {
+            if (levels[nbr] === undefined) {
+                levels[nbr] = levels[curr] + 1;
+                q.push(nbr);
+            }
+        }
+    }
+
+    // 把算好的 level 注入到节点数据中，vis-network 会自动使用
+    let levelUpdates = nodesDataset.get().map(n => {
+        return { id: n.id, level: levels[n.id] !== undefined ? levels[n.id] : 0 };
+    });
+    nodesDataset.update(levelUpdates);
+
     const currentEdgeLen = parseInt(document.getElementById('edgeLength').value) || 100;
     
     network.setOptions({
-        layout: { hierarchical: { enabled: true, direction: 'UD', sortMethod: 'hubsize', nodeSpacing: currentEdgeLen * 1.2, levelSeparation: currentEdgeLen * 1.0 } },
+        layout: { hierarchical: { enabled: true, direction: 'UD', sortMethod: 'directed', nodeSpacing: currentEdgeLen * 1.2, levelSeparation: currentEdgeLen * 1.0 } },
         physics: { enabled: false }
     });
 
