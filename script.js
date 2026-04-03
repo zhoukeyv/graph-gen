@@ -279,7 +279,7 @@ window.toggleBCTreeMode = function() {
 
     if (isBCTreeMode) {
         isBCTreeMode = false;
-        btn.innerText = "圆方树展示";
+        btn.innerText = "圆方树";
         btn.style.backgroundColor = ""; 
         layoutBox.style.display = "none"; 
         bcGeometricPositions = {};
@@ -296,11 +296,11 @@ window.toggleBCTreeMode = function() {
 
     isBCTreeMode = true;
     isBCTreeTreeLayout = false; 
-    btn.innerText = "取消圆方树";
+    btn.innerText = "取消";
     btn.style.backgroundColor = "#e63946"; 
     
     layoutBox.style.display = "flex";
-    document.getElementById('bcTreeLayoutBtn').innerText = "圆方树：树状排版";
+    document.getElementById('bcTreeLayoutBtn').innerText = "树";
     setUIElementsLock(true);
 
     let nodesStr = nodesDataset.getIds().map(String);
@@ -430,11 +430,11 @@ window.toggleBCTreeLayout = function() {
         nodesDataset.update(updates);
         network.fit({ animation: { duration: 600 } });
         
-        btn.innerText = "圆方树：树状排版";
+        btn.innerText = "树状";
         isBCTreeTreeLayout = false;
     } else {
         if (applyBCTreeTreeLayout()) {
-            btn.innerText = "圆方树：恢复几何";
+            btn.innerText = "取消";
             isBCTreeTreeLayout = true;
         }
     }
