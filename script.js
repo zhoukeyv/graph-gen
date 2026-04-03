@@ -91,7 +91,14 @@ function getStyleObject(node, updates) {
     let label = updates.label !== undefined ? updates.label : (node.label || '');
     let shape = updates.shape !== undefined ? updates.shape : (node.shape || 'circle');
     let hoverBorder = darkenHex(customBorder, 0.2); 
-    let colorObj = updates.color || { background: isPinned ? '#f3f4f6' : '#ffffff', border: customBorder, highlight: { background: isPinned ? '#e5e7eb' : '#f0f4ff', border: customBorder }, hover: { background: isPinned ? '#e5e7eb' : '#f8f9fa', border: hoverBorder } };
+    
+    let colorObj;
+    if (shape === 'square') {
+        colorObj = { background: '#f4a261', border: '#e76f51', highlight: { background: '#f4a261', border: '#e76f51' }, hover: { background: '#e76f51', border: '#e76f51' } };
+    } else {
+        colorObj = updates.color || { background: isPinned ? '#f3f4f6' : '#ffffff', border: customBorder, highlight: { background: isPinned ? '#e5e7eb' : '#f0f4ff', border: customBorder }, hover: { background: isPinned ? '#e5e7eb' : '#f8f9fa', border: hoverBorder } };
+    }
+    
     return { id: node.id || updates.id, label: label, shape: shape, isPinned: isPinned, customColor: customBorder, fixed: isPinned ? { x: true, y: true } : { x: false, y: false }, borderWidth: isPinned ? 4 : 2, borderWidthSelected: isPinned ? 4 : 2, color: colorObj, shadow: isPinned ? { enabled: true, color: 'rgba(0,0,0,0.3)', size: 8, x: 2, y: 2 } : true };
 }
 
@@ -171,7 +178,6 @@ function updateLayoutButtonsVisibility() {
         if (!dfn[nodes[0]]) dfs(nodes[0], null);
     }
 
-    // 树也是仙人掌，去掉原先必须包含环 (edgeCount >= n) 的判断
     let showCactus = isCactus;
     
     treeBox.style.display = isTree ? '' : 'none';
@@ -279,7 +285,7 @@ window.toggleBCTreeMode = function() {
 
     if (isBCTreeMode) {
         isBCTreeMode = false;
-        btn.innerText = "圆方树";
+        btn.innerText = "圆方树展示";
         btn.style.backgroundColor = ""; 
         layoutBox.style.display = "none"; 
         bcGeometricPositions = {};
@@ -290,7 +296,8 @@ window.toggleBCTreeMode = function() {
         edgesDataset.add(savedOriginalEdges);
         savedOriginalNodes = null; savedOriginalEdges = null;
         
-        window.forcePhysicsUpdate();
+        // 取消圆方树时，自动执行一次仙人掌排版
+        window.formatAsCactus();
         return;
     }
 
@@ -338,10 +345,9 @@ window.toggleBCTreeMode = function() {
         cx /= b.nodes.length; cy /= b.nodes.length;
 
         newNodes.push({
-            id: sqId, label: '方', shape: 'square', 
+            id: sqId, label: '', shape: 'square',
             size: baseSize * 0.7,
             color: { background: '#f4a261', border: '#e76f51', highlight: { background: '#f4a261', border: '#e76f51' } },
-            font: { color: '#fff', face: 'Arial, sans-serif', size: baseSize * 0.7 },
             fixed: {x: true, y: true},
             x: cx, y: cy,
             isPinned: true,
@@ -430,7 +436,7 @@ window.toggleBCTreeLayout = function() {
         nodesDataset.update(updates);
         network.fit({ animation: { duration: 600 } });
         
-        btn.innerText = "树状";
+        btn.innerText = "树";
         isBCTreeTreeLayout = false;
     } else {
         if (applyBCTreeTreeLayout()) {
