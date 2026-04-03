@@ -30,7 +30,7 @@
                 <div class="form-group"><label>有向图</label><select id="isDirected"><option value="false">无向 (Undirected)</option><option value="true">有向 (Directed)</option></select></div>
                 <div class="form-group"><label>边权</label><select id="isWeighted"><option value="false">无权 (Unweighted)</option><option value="true">有权 (Weighted)</option></select></div>
                 <div class="form-group"><label>最大边权</label><input type="number" id="maxw" value="10" min="1" disabled></div>
-                <button class="btn btn-primary" onclick="generateData()">生成数据</button>
+                <button class="btn btn-primary" id="btnGenerate" onclick="generateData()">生成数据</button>
             </div>
         </details>
 
@@ -41,7 +41,7 @@
     </div>
     
     <div class="main-content">
-        <div class="toolbar">
+        <div class="toolbar" id="topToolbar">
             <div class="tool-group"><label>节点大小:</label><input type="range" id="nodeSize" value="20" min="10" max="50" onchange="updateNodeSize(this.value)"></div>
             <div class="tool-group"><label>边长(弹簧):</label><input type="range" id="edgeLength" value="100" min="30" max="300" onchange="updateEdgeLength(this.value)"></div>
             <div class="divider"></div>
@@ -54,10 +54,11 @@
                 <div class="layout-input-wrapper"><span class="layout-label">根:</span><input type="text" id="treeRootInput" class="layout-input" value="1" title="设置树的根节点"></div>
             </div>
             
-            <!-- 仙人掌去掉了根节点输入框，变成纯净的一键排版按钮 -->
             <button class="btn-layout-standalone" id="cactusLayoutBox" style="display:none;" onclick="formatAsCactus()">仙人掌排版</button>
-
             <button class="btn-layout-standalone" id="bipartiteLayoutBtn" style="display:none;" onclick="formatAsBipartite()">二分图排版</button>
+            
+            <!-- 新增：圆方树按钮 -->
+            <button class="btn-layout-standalone" id="bcTreeBtn" style="display:none;" onclick="toggleBCTreeMode()">圆方树展示</button>
         </div>
         <div id="mynetwork"></div>
     </div>
