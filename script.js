@@ -5,27 +5,17 @@ function getEdges_Tree(n) { if (n <= 1) return []; if (n === 2) return [[1, 2]];
 function getEdges_Chain(n) { let edges = []; for (let i = 1; i < n; i++) edges.push([i, i + 1]); return edges; }
 function getEdges_Daisy(n) { let edges = []; for (let i = 2; i <= n; i++) edges.push([1, i]); return edges; }
 
-// === 更新：生成真正的随机二叉树 ===
 function getEdges_Binary(n) { 
     if (n <= 1) return [];
     let edges = [];
     let childCount = new Array(n + 1).fill(0);
-    // 维护一个"还可以接入子节点"的候选池
     let available = [1];
-    
     for (let i = 2; i <= n; i++) {
-        // 随机挑一个还有空位的父节点
         let randIdx = rand(0, available.length - 1);
         let u = available[randIdx];
-        
         edges.push([u, i]);
         childCount[u]++;
-        
-        // 如果该父节点已经满2个孩子了，移出候选池
-        if (childCount[u] === 2) {
-            available.splice(randIdx, 1);
-        }
-        // 新节点入池
+        if (childCount[u] === 2) available.splice(randIdx, 1);
         available.push(i);
     }
     return edges; 
@@ -81,7 +71,6 @@ function darkenHex(hex, factor = 0.2) { if (!hex || !hex.startsWith('#')) return
 let nodesDataset = null, edgesDataset = null, network = null, contextNodeId = null, contextEdgeId = null;
 const PHYSICS_CONFIG = { gravitationalConstant: -40, centralGravity: 0.01, springConstant: 0.08, damping: 0.8 };
 
-// 圆方树模式状态变量
 let isBCTreeMode = false;
 let savedOriginalNodes = null;
 let savedOriginalEdges = null;
@@ -282,13 +271,11 @@ window.formatAsCactus = function() {
     network.fit({ animation: { duration: 600 } });
 }
 
-// ============== 圆方树模式 ==============
 window.toggleBCTreeMode = function() {
     const btn = document.getElementById('bcTreeBtn');
     const layoutBox = document.getElementById('bcTreeLayoutBox');
 
     if (isBCTreeMode) {
-        // 退回正常模式
         isBCTreeMode = false;
         btn.innerText = "圆方树展示";
         btn.style.backgroundColor = ""; 
@@ -305,7 +292,6 @@ window.toggleBCTreeMode = function() {
         return;
     }
 
-    // 开启模式
     isBCTreeMode = true;
     isBCTreeTreeLayout = false; 
     btn.innerText = "取消圆方树";
@@ -321,7 +307,6 @@ window.toggleBCTreeMode = function() {
     let defaultRoot = nodesStr.includes("1") ? "1" : nodesStr[0];
     document.getElementById('bcTreeRootInput').value = defaultRoot;
 
-    // 几何排版骨架计算
     let { pos, blocks } = calculateCactusPositions(nodesStr, originalEdges);
     let currentPositions = network.getPositions();
     savedOriginalNodes = nodesDataset.get().map(n => { 
@@ -352,9 +337,9 @@ window.toggleBCTreeMode = function() {
 
         newNodes.push({
             id: sqId, label: '方', shape: 'square', 
-            size: baseSize * 0.7, // 缩小方点的基础尺寸
+            size: baseSize * 0.7,
             color: { background: '#f4a261', border: '#e76f51', highlight: { background: '#f4a261', border: '#e76f51' } },
-            font: { color: '#fff', face: 'Arial, sans-serif', size: baseSize * 0.7 }, // 缩小方点的字体以匹配体积
+            font: { color: '#fff', face: 'Arial, sans-serif', size: baseSize * 0.7 },
             fixed: {x: true, y: true},
             x: cx, y: cy,
             isPinned: true,
@@ -369,7 +354,6 @@ window.toggleBCTreeMode = function() {
     edgesDataset.clear(); nodesDataset.clear();
     nodesDataset.add(newNodes); edgesDataset.add(newEdges);
     
-    // 存档几何位置以备切换回来
     bcGeometricPositions = {};
     newNodes.forEach(n => { bcGeometricPositions[n.id] = { x: n.x, y: n.y }; });
 
@@ -406,8 +390,8 @@ window.applyBCTreeTreeLayout = function() {
                 enabled: true, 
                 direction: 'UD', 
                 sortMethod: 'directed', 
-                nodeSpacing: currentEdgeLen * 0.8,      // 大幅缩减横向间距
-                levelSeparation: currentEdgeLen * 0.9   // 大幅缩减纵向层级间距
+                nodeSpacing: currentEdgeLen * 0.8,
+                levelSeparation: currentEdgeLen * 0.9
             } 
         },
         physics: { enabled: false }
@@ -504,6 +488,7 @@ function getCactusBlocks(nodes, edges) {
     return blocks;
 }
 
+// === 更新：解析文本时忽略重边机制 ===
 window.renderGraphFromText = function() {
     if (isBCTreeMode) return;
     if (!nodesDataset || !edgesDataset) return;
@@ -516,14 +501,27 @@ window.renderGraphFromText = function() {
     if (lines.length === 0) { nodesDataset.clear(); edgesDataset.clear(); updateLayoutButtonsVisibility(); return; }
 
     let uniqueNodes = new Set(), newEdges = [];
+    let seenEdges = new Set(); // 用于追踪已经添加的边，防止重边
+
     lines.forEach(line => {
         const parts = line.split(/\s+/);
-        if (parts.length === 1) { uniqueNodes.add(parts[0]); } 
+        if (parts.length === 1) { 
+            uniqueNodes.add(parts[0]); 
+        } 
         else if (parts.length >= 2) {
-            uniqueNodes.add(parts[0]); uniqueNodes.add(parts[1]);
-            let edge = { from: parts[0], to: parts[1] };
-            if (parts.length >= 3) edge.label = parts.slice(2).join(' ');
-            newEdges.push(edge);
+            let u = String(parts[0]), v = String(parts[1]);
+            uniqueNodes.add(u); uniqueNodes.add(v);
+            
+            // 计算边的唯一标识。如果是有向图，1->2 和 2->1 是不同的；如果是无向图，1-2 和 2-1 是相同的。
+            let edgeKey = isDirected ? `${u}->${v}` : (u < v ? `${u}-${v}` : `${v}-${u}`);
+            
+            // 如果这条边之前没出现过，才把它加进视图里
+            if (!seenEdges.has(edgeKey)) {
+                seenEdges.add(edgeKey);
+                let edge = { from: u, to: v };
+                if (parts.length >= 3) edge.label = parts.slice(2).join(' ');
+                newEdges.push(edge);
+            }
         }
     });
 
