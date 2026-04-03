@@ -652,6 +652,48 @@ window.generateData = function() {
 }
 
 window.copyOutput = function() { navigator.clipboard.writeText(document.getElementById('output').value).then(() => { const fb = document.getElementById('copyFeedback'); fb.textContent = '已复制！'; fb.style.opacity = 1; setTimeout(() => fb.style.opacity = 0, 2000); }); }
+
+// ====== 新增：导出图片逻辑 ======
+window.exportImage = function(format) {
+    if (!network) return;
+    
+    const container = document.getElementById('mynetwork');
+    const canvas = container.getElementsByTagName('canvas')[0];
+    if (!canvas) {
+        alert("无法获取画布内容，请稍后重试！");
+        return;
+    }
+
+    let dataURL;
+    if (format === 'jpeg') {
+        // JPG 不支持透明度，直接导出透明背景会变成黑色。因此需要建立临时画布填充白底
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        const ctx = tempCanvas.getContext('2d');
+        
+        ctx.fillStyle = '#ffffff'; // 填充白色背景
+        ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+        ctx.drawImage(canvas, 0, 0);
+        
+        dataURL = tempCanvas.toDataURL('image/jpeg', 1.0);
+    } else {
+        // PNG 默认支持透明度，直接导出
+        dataURL = canvas.toDataURL('image/png');
+    }
+
+    // 创建虚拟 a 标签触发下载
+    const a = document.createElement('a');
+    a.href = dataURL;
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    a.download = `Graph_${timestamp}.${format === 'jpeg' ? 'jpg' : 'png'}`;
+    
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+// =================================
+
 document.addEventListener('DOMContentLoaded', () => {
     try {
         if (typeof vis === 'undefined') { alert('网络库加载失败，请检查网络或更换 CDN。'); return; }
