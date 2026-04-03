@@ -57,8 +57,17 @@
             <button class="btn-layout-standalone" id="cactusLayoutBox" style="display:none;" onclick="formatAsCactus()">仙人掌排版</button>
             <button class="btn-layout-standalone" id="bipartiteLayoutBtn" style="display:none;" onclick="formatAsBipartite()">二分图排版</button>
             
-            <!-- 新增：圆方树按钮 -->
+            <!-- 圆方树触发按钮 -->
             <button class="btn-layout-standalone" id="bcTreeBtn" style="display:none;" onclick="toggleBCTreeMode()">圆方树展示</button>
+            
+            <!-- 圆方树专属排版组件（根节点选择） -->
+            <div class="layout-box" id="bcTreeLayoutBox" style="display:none;">
+                <button class="btn-layout" id="bcTreeLayoutBtn" style="background-color: #2a9d8f; border-right: 1px solid #1f7a6f;" onclick="toggleBCTreeLayout()">圆方树：树状排版</button>
+                <div class="layout-input-wrapper">
+                    <span class="layout-label">根:</span>
+                    <input type="text" id="bcTreeRootInput" class="layout-input" value="1" title="设置圆方树的根节点 (回车生效)" onchange="updateBCTreeLayoutRoot()" onkeydown="if(event.key==='Enter') updateBCTreeLayoutRoot()">
+                </div>
+            </div>
         </div>
         <div id="mynetwork"></div>
     </div>
