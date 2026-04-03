@@ -54,10 +54,8 @@
                 <div class="layout-input-wrapper"><span class="layout-label">根:</span><input type="text" id="treeRootInput" class="layout-input" value="1" title="设置树的根节点"></div>
             </div>
             
-            <div class="layout-box" id="cactusLayoutBox" style="display:none;">
-                <button class="btn-layout" onclick="formatAsCactus()">仙人掌排版</button>
-                <div class="layout-input-wrapper"><span class="layout-label">心:</span><input type="text" id="cactusRootInput" class="layout-input" value="1" title="设置放射中心节点"></div>
-            </div>
+            <!-- 仙人掌去掉了根节点输入框，变成纯净的一键排版按钮 -->
+            <button class="btn-layout-standalone" id="cactusLayoutBox" style="display:none;" onclick="formatAsCactus()">仙人掌排版</button>
 
             <button class="btn-layout-standalone" id="bipartiteLayoutBtn" style="display:none;" onclick="formatAsBipartite()">二分图排版</button>
         </div>
