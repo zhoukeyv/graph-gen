@@ -29,17 +29,21 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; display: flex; height: 10
 .feedback { position: absolute; right: 75px; top: 16px; font-size: 12px; color: #2a9d8f; opacity: 0; transition: opacity 0.3s; pointer-events: none; font-weight: bold; }
 
 .main-content { flex-grow: 1; display: flex; flex-direction: column; position: relative; background: #fff; }
-.toolbar { display: flex; align-items: center; gap: 14px; padding: 12px 24px; background: #fff; border-bottom: 1px solid var(--border-color); flex-wrap: wrap; }
+.toolbar { display: flex; align-items: center; gap: 12px; padding: 12px 24px; background: #fff; border-bottom: 1px solid var(--border-color); flex-wrap: wrap; }
 .tool-group { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #4b5563; font-weight: 500; }
 .divider { width: 1px; height: 24px; background: var(--border-color); }
 
-.tree-layout-box { display: flex; align-items: center; background: #fff; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; height: 36px; transition: 0.2s; }
-.tree-layout-box:focus-within { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(78,110,242,0.1); }
-.btn-tree { padding: 0 16px; height: 100%; border: none; background: transparent; cursor: pointer; font-size: 14px; border-right: 1px solid var(--border-color); transition: 0.2s; color: var(--text-color); width: auto; }
-.btn-tree:hover { background: #f0f4ff; color: var(--primary); }
-.tree-input-wrapper { display: flex; align-items: center; padding: 0 10px; background: #f9fafb; height: 100%; }
-.tree-label { font-size: 13px; color: #6b7280; margin-right: 4px; }
-#treeRootInput { width: 60px; border: none; background: transparent; outline: none; font-size: 14px; text-align: center; color: #111827; font-family: 'Consolas', monospace; font-weight: bold; }
+/* 统一化的排版按钮 UI 系统 */
+.layout-box { display: flex; align-items: center; background: #fff; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; height: 34px; transition: 0.2s; }
+.layout-box:focus-within { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(78,110,242,0.1); }
+.btn-layout { padding: 0 12px; height: 100%; border: none; background: transparent; cursor: pointer; font-size: 13px; border-right: 1px solid var(--border-color); transition: 0.2s; color: var(--primary); font-weight: 600; width: auto; }
+.btn-layout:hover { background: #f0f4ff; }
+.layout-input-wrapper { display: flex; align-items: center; padding: 0 8px; background: #f9fafb; height: 100%; }
+.layout-label { font-size: 13px; color: #6b7280; margin-right: 4px; }
+.layout-input { width: 45px; border: none; background: transparent; outline: none; font-size: 13px; text-align: center; color: #111827; font-family: 'Consolas', monospace; font-weight: bold; }
+
+.btn-layout-standalone { height: 34px; padding: 0 14px; border: 1px solid var(--border-color); border-radius: 6px; background: #fff; cursor: pointer; font-size: 13px; transition: 0.2s; color: var(--primary); font-weight: 600; }
+.btn-layout-standalone:hover { border-color: var(--primary); background: #f0f4ff; }
 
 #mynetwork { flex: 1; width: 100%; height: 100%; min-height: 0; background: #fafbfc; outline: none; }
 
