@@ -59,6 +59,8 @@ const PHYSICS_CONFIG = { gravitationalConstant: -40, centralGravity: 0.01, sprin
 let isBCTreeMode = false;
 let savedOriginalNodes = null;
 let savedOriginalEdges = null;
+let bcGeometricPositions = {}; 
+let isBCTreeTreeLayout = false; 
 
 window.forcePhysicsUpdate = function() {
     if (!network) return;
@@ -158,10 +160,9 @@ function updateLayoutButtonsVisibility() {
     treeBox.style.display = isTree ? '' : 'none';
     bipBtn.style.display = isBipartite ? '' : 'none';
     cactusBox.style.display = showCactus ? '' : 'none'; 
-    bcTreeBtn.style.display = showCactus ? '' : 'none'; // 只有满足仙人掌判定，才显示圆方树
+    bcTreeBtn.style.display = showCactus ? '' : 'none';
 }
 
-// 提取仙人掌底层核心计算逻辑（计算完美正多边形框架的坐标与块分布）
 function calculateCactusPositions(nodes, edges) {
     let blocks = getCactusBlocks(nodes, edges);
     let nodeToBlocks = {}; nodes.forEach(n => nodeToBlocks[n] = []);
@@ -239,7 +240,6 @@ function calculateCactusPositions(nodes, edges) {
     return { pos, blocks };
 }
 
-// 仙人掌排版（复用计算核心）
 window.formatAsCactus = function() {
     if (!network || !nodesDataset) return;
     let nodes = nodesDataset.getIds().map(String), edges = edgesDataset.get();
@@ -252,21 +252,24 @@ window.formatAsCactus = function() {
         return style; 
     });
     nodesDataset.update(updates); 
-    window.forcePhysicsUpdate(); // 恢复拖拽属性
+    window.forcePhysicsUpdate(); 
     network.fit({ animation: { duration: 600 } });
 }
 
-// ============== 极致优雅的圆方树模式 ==============
+// ============== 圆方树模式 ==============
 window.toggleBCTreeMode = function() {
     const btn = document.getElementById('bcTreeBtn');
+    const layoutBox = document.getElementById('bcTreeLayoutBox');
+
     if (isBCTreeMode) {
         // 退回正常模式
         isBCTreeMode = false;
         btn.innerText = "圆方树展示";
         btn.style.backgroundColor = ""; 
+        layoutBox.style.display = "none"; 
+        bcGeometricPositions = {};
         setUIElementsLock(false);
         
-        // 恢复原有节点和边，找回它们之前的属性
         nodesDataset.clear(); edgesDataset.clear();
         nodesDataset.add(savedOriginalNodes);
         edgesDataset.add(savedOriginalEdges);
@@ -276,19 +279,25 @@ window.toggleBCTreeMode = function() {
         return;
     }
 
-    // 开启圆方树模式
+    // 开启模式
     isBCTreeMode = true;
+    isBCTreeTreeLayout = false; 
     btn.innerText = "取消圆方树";
     btn.style.backgroundColor = "#e63946"; 
+    
+    layoutBox.style.display = "flex";
+    document.getElementById('bcTreeLayoutBtn').innerText = "圆方树：树状排版";
     setUIElementsLock(true);
 
     let nodesStr = nodesDataset.getIds().map(String);
     let originalEdges = edgesDataset.get();
 
-    // 1. 获取完美的仙人掌骨架坐标，作为铺垫
-    let { pos, blocks } = calculateCactusPositions(nodesStr, originalEdges);
+    // 默认根节点预填为编号1（如果没有则选第一个）
+    let defaultRoot = nodesStr.includes("1") ? "1" : nodesStr[0];
+    document.getElementById('bcTreeRootInput').value = defaultRoot;
 
-    // 2. 抓取当前物理状态存档，以便取消后恢复用户自己的拖拉位置
+    // 几何排版骨架计算
+    let { pos, blocks } = calculateCactusPositions(nodesStr, originalEdges);
     let currentPositions = network.getPositions();
     savedOriginalNodes = nodesDataset.get().map(n => { 
         let clone = Object.assign({}, n); 
@@ -297,16 +306,14 @@ window.toggleBCTreeMode = function() {
     });
     savedOriginalEdges = originalEdges;
 
-    // 3. 构建圆方树（圆点基于仙人掌排版固定，方点置于几何中心）
+    // 构建图数据
     let newNodes = [], newEdges = [];
-    
     savedOriginalNodes.forEach(n => {
         let clone = Object.assign({}, n);
         clone.shape = 'circle'; 
         clone.isPinned = true;
-        clone.fixed = {x: true, y: true}; // 彻底锁死
+        clone.fixed = {x: true, y: true}; 
         if (pos[n.id]) { clone.x = pos[n.id].x; clone.y = pos[n.id].y; }
-        // 圆点设为统一的白底与蓝色/自定义描边
         clone.color = { background: '#ffffff', border: clone.customColor || '#4e6ef2' };
         newNodes.push(clone);
     });
@@ -314,7 +321,6 @@ window.toggleBCTreeMode = function() {
     blocks.forEach((b, i) => {
         let sqId = `_square_${i}`;
         let cx = 0, cy = 0;
-        // 方点直接落在多边形的几何中心，或者桥的中点！
         b.nodes.forEach(u => { cx += pos[u].x; cy += pos[u].y; });
         cx /= b.nodes.length; cy /= b.nodes.length;
 
@@ -328,7 +334,6 @@ window.toggleBCTreeMode = function() {
             shadow: { enabled: true, color: 'rgba(0,0,0,0.3)', size: 8, x: 2, y: 2 }
         });
 
-        // 原有边消失，替换为方点到圆点的虚线
         b.nodes.forEach(u => {
             newEdges.push({ from: sqId, to: u, color: { color: '#e76f51' }, width: 3, dashes: true, smooth: { type: 'continuous' } });
         });
@@ -336,10 +341,92 @@ window.toggleBCTreeMode = function() {
 
     edgesDataset.clear(); nodesDataset.clear();
     nodesDataset.add(newNodes); edgesDataset.add(newEdges);
+    
+    // 存档几何位置以备切换回来
+    bcGeometricPositions = {};
+    newNodes.forEach(n => { bcGeometricPositions[n.id] = { x: n.x, y: n.y }; });
 
-    // 彻底关闭物理引擎，让其如同几何插画一样静止
     network.setOptions({ physics: { enabled: false } }); 
     network.fit({ animation: { duration: 600 } });
+}
+
+// 供切换按钮与输入框回车共用的核心树状排版执行逻辑
+window.applyBCTreeTreeLayout = function() {
+    let nodes = nodesDataset.getIds();
+    let rootId = document.getElementById('bcTreeRootInput').value.trim();
+    
+    if (!rootId || !nodes.includes(rootId)) {
+        alert(`未在当前图中找到节点 [${rootId}]！\n你可以输入任意圆点编号，或方点编号（如 _square_0）。`);
+        return false;
+    }
+
+    let adj = {}; nodes.forEach(id => adj[id] = []);
+    edgesDataset.get().forEach(e => { adj[e.from].push(e.to); adj[e.to].push(e.from); });
+
+    let levels = {}, q = [rootId]; levels[rootId] = 0;
+    while (q.length > 0) {
+        let curr = q.shift();
+        for (let nbr of adj[curr]) {
+            if (levels[nbr] === undefined) { levels[nbr] = levels[curr] + 1; q.push(nbr); }
+        }
+    }
+
+    nodesDataset.update(nodesDataset.get().map(n => ({ id: n.id, level: levels[n.id] !== undefined ? levels[n.id] : 0 })));
+
+    const currentEdgeLen = parseInt(document.getElementById('edgeLength').value) || 100;
+    network.setOptions({
+        layout: { hierarchical: { enabled: true, direction: 'UD', sortMethod: 'directed', nodeSpacing: currentEdgeLen * 1.5, levelSeparation: currentEdgeLen * 1.8 } },
+        physics: { enabled: false }
+    });
+
+    setTimeout(() => {
+        let positions = network.getPositions();
+        network.setOptions({ layout: { hierarchical: { enabled: false } } });
+        nodesDataset.update(nodesDataset.get().map(node => {
+            let style = getStyleObject(node, { isPinned: true });
+            if (positions[node.id]) { style.x = positions[node.id].x; style.y = positions[node.id].y; }
+            return style;
+        }));
+        network.fit({ animation: { duration: 600 } });
+    }, 50);
+
+    return true;
+}
+
+window.toggleBCTreeLayout = function() {
+    if (!network || !nodesDataset || !isBCTreeMode) return;
+    const btn = document.getElementById('bcTreeLayoutBtn');
+
+    if (isBCTreeTreeLayout) {
+        // 退回几何排版
+        network.setOptions({ layout: { hierarchical: { enabled: false } }, physics: { enabled: false } });
+        let updates = nodesDataset.get().map(node => {
+            let style = getStyleObject(node, { isPinned: true });
+            if (bcGeometricPositions[node.id]) {
+                style.x = bcGeometricPositions[node.id].x;
+                style.y = bcGeometricPositions[node.id].y;
+            }
+            return style;
+        });
+        nodesDataset.update(updates);
+        network.fit({ animation: { duration: 600 } });
+        
+        btn.innerText = "圆方树：树状排版";
+        isBCTreeTreeLayout = false;
+    } else {
+        // 执行树状排版
+        if (applyBCTreeTreeLayout()) {
+            btn.innerText = "圆方树：恢复几何";
+            isBCTreeTreeLayout = true;
+        }
+    }
+}
+
+// 当输入框内容发生改变（失焦/回车）时，如果在树状模式，直接无缝更新视图
+window.updateBCTreeLayoutRoot = function() {
+    if (isBCTreeMode && isBCTreeTreeLayout) {
+        applyBCTreeTreeLayout();
+    }
 }
 
 function setUIElementsLock(locked) {
