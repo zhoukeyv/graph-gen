@@ -1,10 +1,63 @@
 function rand(l, r) { return Math.floor(Math.random() * (r - l + 1)) + l; }
 function insertSorted(arr, val) { let low = 0, high = arr.length - 1; while (low <= high) { let mid = Math.floor((low + high) / 2); if (arr[mid] < val) low = mid + 1; else high = mid - 1; } arr.splice(low, 0, val); }
+
+// 图论结构生成算法
 function getEdges_Tree(n) { if (n <= 1) return []; if (n === 2) return [[1, 2]]; let edges = [], degree = new Array(n + 1).fill(1), sequence = []; for (let i = 0; i < n - 2; i++) { let node = rand(1, n); sequence.push(node); degree[node]++; } let leaves = []; for (let i = 1; i <= n; i++) if (degree[i] === 1) leaves.push(i); leaves.sort((a, b) => a - b); for (let i = 0; i < n - 2; i++) { let u = leaves.shift(), v = sequence[i]; edges.push([u, v]); if (--degree[v] === 1) insertSorted(leaves, v); } edges.push([leaves[0], leaves[1]]); return edges; }
 function getEdges_Chain(n) { let edges = []; for (let i = 1; i < n; i++) edges.push([i, i + 1]); return edges; }
 function getEdges_Daisy(n) { let edges = []; for (let i = 2; i <= n; i++) edges.push([1, i]); return edges; }
 function getEdges_Binary(n) { let edges = []; for (let i = 1; i <= n; i++) { if (i * 2 <= n) edges.push([i, i * 2]); if (i * 2 + 1 <= n) edges.push([i, i * 2 + 1]); } return edges; }
 function getEdges_Graph(n, m, isDirected) { let set = new Set(), edges = []; let maxEdges = isDirected ? n * (n - 1) : n * (n - 1) / 2; m = Math.min(m, maxEdges); while (set.size < m) { let u = rand(1, n), v = rand(1, n); if (u === v) continue; if (!isDirected && u > v) [u, v] = [v, u]; let key = `${u}-${v}`; if (!set.has(key)) { set.add(key); edges.push([u, v]); } } return edges; }
+
+// 新增：仙人掌图生成 (节点扩展法，确保没有边属于两个环)
+function getEdges_Cactus(n) {
+    if (n <= 1) return [];
+    let edges = [], active = [1], unused = [];
+    for (let i = 2; i <= n; i++) unused.push(i);
+    unused.sort(() => Math.random() - 0.5); // 随机打乱
+    
+    while (unused.length > 0) {
+        let u = active[rand(0, active.length - 1)];
+        // 如果剩余节点足够，有 70% 概率生成环，否则生成普通单边
+        if (unused.length >= 2 && Math.random() < 0.7) {
+            let cycleLen = rand(3, Math.min(5, unused.length + 1));
+            let prev = u;
+            for (let i = 0; i < cycleLen - 1; i++) {
+                let curr = unused.pop();
+                edges.push([prev, curr]);
+                active.push(curr);
+                prev = curr;
+                if (i === cycleLen - 2) edges.push([curr, u]); // 闭合环
+            }
+        } else {
+            let v = unused.pop();
+            edges.push([u, v]);
+            active.push(v);
+        }
+    }
+    return edges;
+}
+
+// 新增：二分图生成 (划分两个不相交集合连边)
+function getEdges_Bipartite(n, m, isDirected) {
+    let set1 = [], set2 = [];
+    for (let i = 1; i <= n; i++) { if (Math.random() > 0.5) set1.push(i); else set2.push(i); }
+    if (set1.length === 0) set1.push(set2.pop());
+    if (set2.length === 0) set2.push(set1.pop());
+    
+    let maxE = isDirected ? (set1.length * set2.length * 2) : (set1.length * set2.length);
+    m = Math.min(m, maxE);
+    
+    let edges = [], existing = new Set(), attempts = 0;
+    while (edges.length < m && attempts < m * 10) {
+        attempts++;
+        let u = set1[rand(0, set1.length - 1)], v = set2[rand(0, set2.length - 1)];
+        if (isDirected && Math.random() > 0.5) [u, v] = [v, u];
+        let key = isDirected ? `${u}->${v}` : (u < v ? `${u}-${v}` : `${v}-${u}`);
+        if (!existing.has(key)) { existing.add(key); edges.push([u, v]); }
+    }
+    return edges;
+}
+
 function darkenHex(hex, factor = 0.2) { if (!hex || !hex.startsWith('#')) return hex; let r = parseInt(hex.substring(1, 3), 16), g = parseInt(hex.substring(3, 5), 16), b = parseInt(hex.substring(5, 7), 16); r = Math.max(0, Math.floor(r * (1 - factor))); g = Math.max(0, Math.floor(g * (1 - factor))); b = Math.max(0, Math.floor(b * (1 - factor))); return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1); }
 
 let nodesDataset = null, edgesDataset = null, network = null, contextNodeId = null, contextEdgeId = null;
@@ -53,7 +106,6 @@ function initNetwork() {
     network.on("zoom", closeContextMenu);
 }
 
-// 核心修改：支持任意字符串并且取消首行填N的强设定
 window.renderGraphFromText = function() {
     if (!nodesDataset || !edgesDataset) return;
     let isDirected = document.getElementById('isDirected').value === 'true'; 
@@ -64,27 +116,21 @@ window.renderGraphFromText = function() {
     const lines = text.split('\n').map(l => l.trim()).filter(l => l !== ''); 
     if (lines.length === 0) { nodesDataset.clear(); edgesDataset.clear(); return; }
 
-    let uniqueNodes = new Set();
-    let newEdges = [];
-
+    let uniqueNodes = new Set(), newEdges = [];
     lines.forEach(line => {
         const parts = line.split(/\s+/);
-        if (parts.length === 1) {
-            uniqueNodes.add(parts[0]);
-        } else if (parts.length >= 2) {
-            uniqueNodes.add(parts[0]);
-            uniqueNodes.add(parts[1]);
+        if (parts.length === 1) { uniqueNodes.add(parts[0]); } 
+        else if (parts.length >= 2) {
+            uniqueNodes.add(parts[0]); uniqueNodes.add(parts[1]);
             let edge = { from: parts[0], to: parts[1] };
-            if (parts.length >= 3) { edge.label = parts.slice(2).join(' '); }
+            if (parts.length >= 3) edge.label = parts.slice(2).join(' ');
             newEdges.push(edge);
         }
     });
 
     let currentIds = new Set(nodesDataset.getIds().map(String));
     let nodesToAdd = [];
-    uniqueNodes.forEach(id => {
-        if (!currentIds.has(id)) { nodesToAdd.push(getStyleObject({ id: id, label: id }, {})); }
-    });
+    uniqueNodes.forEach(id => { if (!currentIds.has(id)) nodesToAdd.push(getStyleObject({ id: id, label: id }, {})); });
     
     let nodeIdsToRemove = Array.from(currentIds).filter(id => !uniqueNodes.has(id));
     if (nodeIdsToRemove.length > 0) nodesDataset.remove(nodeIdsToRemove);
@@ -106,7 +152,6 @@ window.updateEdgeLength = function(val) { window.forcePhysicsUpdate(); }
 window.pinAll = function() { if(!nodesDataset) return; nodesDataset.update(nodesDataset.get().map(node => getStyleObject(node, { isPinned: true }))); }
 window.unpinAll = function() { if(!nodesDataset) return; nodesDataset.update(nodesDataset.get().map(node => getStyleObject(node, { isPinned: false }))); window.forcePhysicsUpdate(); }
 
-// 核心修改：支持字符串查找根节点
 window.formatAsTree = function() {
     if (!network || !nodesDataset) return;
     let rootId = document.getElementById('treeRootInput').value.trim();
@@ -121,11 +166,38 @@ window.formatAsTree = function() {
     setTimeout(() => { let positions = network.getPositions(); network.setOptions({ layout: { hierarchical: { enabled: false } } }); nodesDataset.update(nodesDataset.get().map(node => { let style = getStyleObject(node, { isPinned: true }); if (positions[node.id]) { style.x = positions[node.id].x; style.y = positions[node.id].y; } return style; })); window.forcePhysicsUpdate(); network.fit({ animation: { duration: 600 } }); }, 50);
 }
 
+// 新增：二分图左右排版 (BFS 2-Coloring)
+window.formatAsBipartite = function() {
+    if (!network || !nodesDataset) return;
+    let adj = {}; nodesDataset.getIds().forEach(id => adj[id] = []);
+    edgesDataset.get().forEach(e => { adj[e.from].push(e.to); adj[e.to].push(e.from); });
+    
+    let color = {}, isBipartite = true;
+    nodesDataset.getIds().forEach(startNode => {
+        if (color[startNode] === undefined) {
+            let q = [startNode]; color[startNode] = 0;
+            while(q.length > 0) {
+                let u = q.shift();
+                adj[u].forEach(v => {
+                    if (color[v] === undefined) { color[v] = 1 - color[u]; q.push(v); } 
+                    else if (color[v] === color[u]) { isBipartite = false; }
+                });
+            }
+        }
+    });
+
+    if (!isBipartite) alert("检测到奇数环，当前输入并非严格的二分图！强制左右排版可能会有连线交叉。");
+    
+    nodesDataset.update(nodesDataset.get().map(n => ({ id: n.id, level: color[n.id] !== undefined ? color[n.id] : 0 })));
+    const currentEdgeLen = parseInt(document.getElementById('edgeLength').value) || 100;
+    
+    network.setOptions({ layout: { hierarchical: { enabled: true, direction: 'LR', sortMethod: 'directed', levelSeparation: currentEdgeLen * 2.5, nodeSpacing: currentEdgeLen } }, physics: { enabled: false } });
+    setTimeout(() => { let positions = network.getPositions(); network.setOptions({ layout: { hierarchical: { enabled: false } } }); nodesDataset.update(nodesDataset.get().map(node => { let style = getStyleObject(node, { isPinned: true }); if (positions[node.id]) { style.x = positions[node.id].x; style.y = positions[node.id].y; } return style; })); window.forcePhysicsUpdate(); network.fit({ animation: { duration: 600 } }); }, 50);
+}
+
 window.closeContextMenu = function() { document.getElementById('contextMenu').style.display = 'none'; document.getElementById('edgeContextMenu').style.display = 'none'; contextNodeId = null; contextEdgeId = null; }
 window.selectColor = function(hexStr) { document.getElementById('nodeColorInput').value = hexStr; saveNodeConfig(); }
 window.saveNodeConfig = function() { if (contextNodeId !== null) { updateNodeStyle(contextNodeId, { label: document.getElementById('nodeLabelInput').value.trim() || String(contextNodeId), customColor: document.getElementById('nodeColorInput').value }); closeContextMenu(); } }
-
-// 核心修改：支持保存字符串关联的边
 window.saveEdgeConfig = function() {
     if (contextEdgeId !== null) {
         let newWeight = document.getElementById('edgeLabelInput').value.trim(); 
@@ -148,33 +220,40 @@ window.saveEdgeConfig = function() {
     }
 }
 
+// 修改：将二分图也加入可自由设定边数 M 的范围
 window.updateInputs = function() {
     const n = parseInt(document.getElementById('n').value), mInput = document.getElementById('m'), maxwInput = document.getElementById('maxw'), struct = document.getElementById('graphStructure').value, isDirSelect = document.getElementById('isDirected'), isWSelect = document.getElementById('isWeighted');
-    if (struct !== 'graph') { isDirSelect.value = "false"; isDirSelect.disabled = true; mInput.disabled = true; } else { isDirSelect.disabled = false; mInput.disabled = false; }
-    let isDir = isDirSelect.value === 'true'; if (!isNaN(n)) mInput.max = isDir ? n * (n - 1) : Math.min(10000, n * (n - 1) / 2); maxwInput.disabled = (isWSelect.value === 'false');
+    if (['graph', 'bipartite'].includes(struct)) { 
+        isDirSelect.disabled = false; mInput.disabled = false; 
+    } else { 
+        isDirSelect.value = "false"; isDirSelect.disabled = true; mInput.disabled = true; 
+    }
+    let isDir = isDirSelect.value === 'true'; 
+    if (!isNaN(n)) mInput.max = isDir ? n * (n - 1) : Math.min(10000, n * (n - 1) / 2); 
+    maxwInput.disabled = (isWSelect.value === 'false');
     renderGraphFromText();
 }
 
-// 核心修改：生成数据后直接输出字符串映射（去除原先首行的节点数 N）
 window.generateData = function() {
     let n = parseInt(document.getElementById('n').value), m = parseInt(document.getElementById('m').value), maxw = parseInt(document.getElementById('maxw').value);
     const struct = document.getElementById('graphStructure').value, isDirected = (document.getElementById('isDirected').value === 'true'), isWeighted = (document.getElementById('isWeighted').value === 'true');
     if (isNaN(n) || n < 1) n = 10; if (n > 300) { alert("节点数暂时限制在 300 以内。"); n = 300; document.getElementById('n').value = 300; }
     if (isNaN(m) || m < 0) m = n; if (isNaN(maxw) || maxw < 1) maxw = 10;
     let edges = [];
-    switch (struct) { case 'tree': edges = getEdges_Tree(n); break; case 'chain': edges = getEdges_Chain(n); break; case 'daisy': edges = getEdges_Daisy(n); break; case 'binary': edges = getEdges_Binary(n); break; case 'graph': edges = getEdges_Graph(n, m, isDirected); break; }
-    if (isWeighted) { edges = edges.map(e => [e[0], e[1], rand(1, maxw)]); }
+    switch (struct) { 
+        case 'tree': edges = getEdges_Tree(n); break; 
+        case 'chain': edges = getEdges_Chain(n); break; 
+        case 'daisy': edges = getEdges_Daisy(n); break; 
+        case 'binary': edges = getEdges_Binary(n); break; 
+        case 'cactus': edges = getEdges_Cactus(n); break;
+        case 'bipartite': edges = getEdges_Bipartite(n, m, isDirected); break;
+        case 'graph': edges = getEdges_Graph(n, m, isDirected); break; 
+    }
+    if (isWeighted) edges = edges.map(e => [e[0], e[1], rand(1, maxw)]);
     
-    let out = "";
-    let generatedNodes = new Set();
-    for(let e of edges) { 
-        out += e.join(' ') + '\n'; 
-        generatedNodes.add(String(e[0])); generatedNodes.add(String(e[1])); 
-    }
-    // 添加未连边的独立节点
-    for (let i = 1; i <= n; i++) {
-        if (!generatedNodes.has(String(i))) { out += i + '\n'; }
-    }
+    let out = "", generatedNodes = new Set();
+    for(let e of edges) { out += e.join(' ') + '\n'; generatedNodes.add(String(e[0])); generatedNodes.add(String(e[1])); }
+    for (let i = 1; i <= n; i++) { if (!generatedNodes.has(String(i))) { out += i + '\n'; } }
     
     document.getElementById('output').value = out.trim(); 
     renderGraphFromText();
