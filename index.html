@@ -34,6 +34,13 @@
             </div>
         </details>
 
+        <!-- ====== 导出图片功能 (移到了左侧) ====== -->
+        <div style="display: flex; gap: 10px;">
+            <button class="btn" style="flex: 1; text-align: center;" onclick="exportImage('png')" title="导出带有透明背景的 PNG 图片">导出 PNG</button>
+            <button class="btn" style="flex: 1; text-align: center;" onclick="exportImage('jpeg')" title="导出带有白色背景的 JPG 图片">导出 JPG</button>
+        </div>
+        <!-- ===================================== -->
+
         <div class="output-container">
             <textarea id="output" placeholder="支持任意字符串，如：&#10;A B 10&#10;苹果 香蕉&#10;孤立节点" oninput="renderGraphFromText()"></textarea>
             <button class="btn btn-copy" onclick="copyOutput()">复制</button><span id="copyFeedback" class="feedback">已复制！</span>
@@ -68,12 +75,6 @@
                     <input type="text" id="bcTreeRootInput" class="layout-input" value="1" title="设置圆方树的根节点 (回车生效)" onchange="updateBCTreeLayoutRoot()" onkeydown="if(event.key==='Enter') updateBCTreeLayoutRoot()">
                 </div>
             </div>
-
-            <!-- ====== 新增：导出图片功能 ====== -->
-            <div class="divider"></div>
-            <button class="btn" onclick="exportImage('png')" title="导出带有透明背景的 PNG 图片">导出 PNG</button>
-            <button class="btn" onclick="exportImage('jpeg')" title="导出带有白色背景的 JPG 图片">导出 JPG</button>
-            <!-- ================================= -->
         </div>
         <div id="mynetwork"></div>
     </div>
