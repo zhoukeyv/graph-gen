@@ -7,7 +7,6 @@ function getEdges_Daisy(n) { let edges = []; for (let i = 2; i <= n; i++) edges.
 function getEdges_Binary(n) { let edges = []; for (let i = 1; i <= n; i++) { if (i * 2 <= n) edges.push([i, i * 2]); if (i * 2 + 1 <= n) edges.push([i, i * 2 + 1]); } return edges; }
 function getEdges_Graph(n, m, isDirected) { let set = new Set(), edges = []; let maxEdges = isDirected ? n * (n - 1) : n * (n - 1) / 2; m = Math.min(m, maxEdges); while (set.size < m) { let u = rand(1, n), v = rand(1, n); if (u === v) continue; if (!isDirected && u > v) [u, v] = [v, u]; let key = `${u}-${v}`; if (!set.has(key)) { set.add(key); edges.push([u, v]); } } return edges; }
 
-// 完美控制边数 M 的仙人掌图生成算法
 function getEdges_Cactus(n, m) {
     if (n <= 1) return [];
     let max_m = n - 1 + Math.floor((n - 1) / 2);
@@ -273,7 +272,7 @@ function getCactusBlocks(nodes, edges) {
     return blocks;
 }
 
-// 全新自适应扇区花瓣展开排版算法 (绝对零重叠)
+// 终极完美正多边形仙人掌排版（100%全自动寻找枢纽割点，无需输入）
 window.formatAsCactus = function() {
     if (!network || !nodesDataset) return;
     let nodes = nodesDataset.getIds().map(String), edges = edgesDataset.get();
@@ -281,10 +280,14 @@ window.formatAsCactus = function() {
     let nodeToBlocks = {}; nodes.forEach(n => nodeToBlocks[n] = []);
     blocks.forEach((b, i) => { b.nodes.forEach(n => nodeToBlocks[n].push(i)); });
     
-    let startNode = document.getElementById('cactusRootInput').value.trim();
-    if (!startNode || !nodesDataset.get(startNode)) startNode = nodes[0];
+    // 【完全自动化】遍历寻找全图连接块数最多、最核心的“超级割点”作为排版中心
+    let startNode = nodes[0], maxBlocks = -1;
+    nodes.forEach(u => {
+        let bCount = nodeToBlocks[u].length;
+        if (bCount > maxBlocks) { maxBlocks = bCount; startNode = u; }
+    });
 
-    // 递归计算整棵树各个子分支的节点规模（作为瓜分扇区角度的绝对权重）
+    // 递归计算整棵树各个子分支的节点规模
     let nodeWeight = {}, blockWeight = {};
     function computeWeight(u, pBlock) {
         let w = 1;
@@ -300,9 +303,10 @@ window.formatAsCactus = function() {
     
     let pos = {}, placedNodes = new Set();
     pos[startNode] = { x: 0, y: 0 }; placedNodes.add(startNode);
-    const L_0 = parseInt(document.getElementById('edgeLength').value) || 100;
+    // 稍微放大弹簧基础长度，给复杂的环留足空间
+    const L_0 = (parseInt(document.getElementById('edgeLength').value) || 100) * 1.2;
     
-    // 递归辐射分配：每个节点严格在切分给它的 angleRange 扇区内进行排布
+    // 纯粹严谨的几何排版递归
     function layoutNode(u, pBlock, baseAngle, angleRange) {
         let childBlocks = nodeToBlocks[u].filter(bIdx => bIdx !== pBlock);
         if (childBlocks.length === 0) return;
@@ -313,7 +317,7 @@ window.formatAsCactus = function() {
         for (let bIdx of childBlocks) {
             let b = blocks[bIdx];
             let bw = blockWeight[bIdx];
-            let bRange = angleRange * (bw / totalW); // 严格按权重切分局部扇区
+            let bRange = angleRange * (bw / totalW); // 依然按权重切分角度
             let bAngle = currentAngle + bRange / 2;
             
             if (b.type === 'bridge') {
@@ -327,43 +331,43 @@ window.formatAsCactus = function() {
                 let K = b.nodes.length;
                 let idx = b.nodes.indexOf(u);
                 let seq = [];
-                for (let i = 0; i < K; i++) seq.push(b.nodes[(idx + i) % K]); // seq[0] 是切入点 u
+                for (let i = 0; i < K; i++) seq.push(b.nodes[(idx + i) % K]);
                 
-                let angleStep = bRange / K;
-                let L = L_0;
-                // 【突破性改进】：解除 L 的上限锁定！如果扇区极窄，自动拉长距离，将其压缩为完美适配的“花瓣”
-                if (angleStep < Math.PI) {
-                    L = L_0 / (2 * Math.max(0.01, Math.sin(angleStep / 2)));
-                }
-                L = Math.max(L_0, L); // 保证距离不会太近
+                // 利用正多边形外接圆公式计算几何中心
+                let R = L_0 / (2 * Math.sin(Math.PI / K)); 
+                let cx = pos[u].x + R * Math.cos(bAngle);
+                let cy = pos[u].y + R * Math.sin(bAngle);
+                
+                // u 到几何中心的夹角
+                let phi_0 = bAngle + Math.PI;
                 
                 let sumVWeights = 0;
                 for (let i = 1; i < K; i++) sumVWeights += nodeWeight[seq[i]];
+                if(sumVWeights === 0) sumVWeights = 1;
                 
-                let vCurrentAngle = currentAngle;
                 for (let i = 1; i < K; i++) {
                     let v = seq[i];
-                    let vw = nodeWeight[v];
-                    let vRange = bRange * (vw / sumVWeights); // 环上各点再次瓜分本环的扇区
-                    let vAngle = vCurrentAngle + vRange / 2;
-                    
+                    // 严格按照正多边形的节点相对中心的极角进行分布
+                    let phi_i = phi_0 + i * (2 * Math.PI / K);
                     if (!placedNodes.has(v)) {
-                        // 环的节点物理坐标严格放置在该专属扇区的中轴线上
-                        pos[v] = {
-                            x: pos[u].x + L * Math.cos(vAngle),
-                            y: pos[u].y + L * Math.sin(vAngle)
-                        };
+                        pos[v] = { x: cx + R * Math.cos(phi_i), y: cy + R * Math.sin(phi_i) };
                         placedNodes.add(v);
-                        layoutNode(v, bIdx, vAngle, vRange);
+                        
+                        // 子节点严格沿着该节点背离中心的法线方向发散
+                        let vW = nodeWeight[v];
+                        let vRange = bRange * (vW / sumVWeights);
+                        // 上限保护，防止某个极端大分支卷曲穿模
+                        vRange = Math.min(vRange, 2 * Math.PI * 0.8); 
+                        
+                        layoutNode(v, bIdx, phi_i, vRange);
                     }
-                    vCurrentAngle += vRange;
                 }
             }
             currentAngle += bRange;
         }
     }
     
-    // 给整棵树最高完整的 360 度圆周发育空间
+    // 中心大割点享受完整的 360 度 (2*PI) 无死角生长空间
     layoutNode(startNode, -1, 0, 2 * Math.PI);
     
     network.setOptions({ physics: { enabled: false } });
@@ -372,7 +376,7 @@ window.formatAsCactus = function() {
         if (pos[node.id]) { style.x = pos[node.id].x; style.y = pos[node.id].y; }
         return style;
     });
-    nodesDataset.update(updates); window.forcePhysicsUpdate(); network.fit({ animation: { duration: 800 } });
+    nodesDataset.update(updates); window.forcePhysicsUpdate(); network.fit({ animation: { duration: 600 } });
 }
 
 window.closeContextMenu = function() { document.getElementById('contextMenu').style.display = 'none'; document.getElementById('edgeContextMenu').style.display = 'none'; contextNodeId = null; contextEdgeId = null; }
