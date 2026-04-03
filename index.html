@@ -10,11 +10,22 @@
     <div class="sidebar">
         <h2>Graph Editor</h2>
         
-        <!-- 新增：将生成部分包裹进原生下拉框 <details> -->
-        <details class="gen-box">
+        <details class="gen-box" open>
             <summary>配置与生成图数据</summary>
             <div class="gen-content">
-                <div class="form-group"><label>结构类型</label><select id="graphStructure"><option value="tree">随机树 (Tree)</option><option value="chain">链表 (Chain)</option><option value="daisy">菊花图 (Daisy)</option><option value="binary">二叉树 (Binary Tree)</option><option value="graph">普通图 (Graph)</option></select></div>
+                <!-- 新增：仙人掌图、二分图 -->
+                <div class="form-group">
+                    <label>结构类型</label>
+                    <select id="graphStructure">
+                        <option value="tree">随机树 (Tree)</option>
+                        <option value="chain">链表 (Chain)</option>
+                        <option value="daisy">菊花图 (Daisy)</option>
+                        <option value="binary">二叉树 (Binary Tree)</option>
+                        <option value="cactus">仙人掌图 (Cactus)</option>
+                        <option value="bipartite">二分图 (Bipartite)</option>
+                        <option value="graph">普通图 (Graph)</option>
+                    </select>
+                </div>
                 <div class="form-group"><label>节点数 (N)</label><input type="number" id="n" value="10" min="1" max="300"></div>
                 <div class="form-group"><label>边数 (M)</label><input type="number" id="m" value="15" min="0"></div>
                 <div class="form-group"><label>有向图</label><select id="isDirected"><option value="false">无向 (Undirected)</option><option value="true">有向 (Directed)</option></select></div>
@@ -36,10 +47,14 @@
             <div class="tool-group"><label>边长(弹簧):</label><input type="range" id="edgeLength" value="100" min="30" max="300" onchange="updateEdgeLength(this.value)"></div>
             <div class="divider"></div>
             <button class="btn" onclick="pinAll()">固定所有</button>
-            <button class="btn" onclick="unpinAll()">全部解除固定</button>
+            <button class="btn" onclick="unpinAll()">全部解除</button>
             <div class="divider"></div>
-            <!-- 支持字符串，因此 type="text" -->
-            <div class="tree-layout-box"><button class="btn-tree" onclick="formatAsTree()">树状排版</button><div class="tree-input-wrapper"><span class="tree-label">根:</span><input type="text" id="treeRootInput" value="1" title="设置树的根节点标识符"></div></div>
+            <div class="tree-layout-box">
+                <button class="btn-tree" onclick="formatAsTree()">树状排版</button>
+                <div class="tree-input-wrapper"><span class="tree-label">根:</span><input type="text" id="treeRootInput" value="1" title="设置树的根节点标识符"></div>
+            </div>
+            <!-- 新增：二分图左右排版按钮 -->
+            <button class="btn btn-tree-alone" onclick="formatAsBipartite()">二分图排版 (LR)</button>
         </div>
         <div id="mynetwork"></div>
     </div>
