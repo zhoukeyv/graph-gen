@@ -1,56 +1,38 @@
 function rand(l, r) { return Math.floor(Math.random() * (r - l + 1)) + l; }
 function insertSorted(arr, val) { let low = 0, high = arr.length - 1; while (low <= high) { let mid = Math.floor((low + high) / 2); if (arr[mid] < val) low = mid + 1; else high = mid - 1; } arr.splice(low, 0, val); }
 
-// 图论结构生成算法
 function getEdges_Tree(n) { if (n <= 1) return []; if (n === 2) return [[1, 2]]; let edges = [], degree = new Array(n + 1).fill(1), sequence = []; for (let i = 0; i < n - 2; i++) { let node = rand(1, n); sequence.push(node); degree[node]++; } let leaves = []; for (let i = 1; i <= n; i++) if (degree[i] === 1) leaves.push(i); leaves.sort((a, b) => a - b); for (let i = 0; i < n - 2; i++) { let u = leaves.shift(), v = sequence[i]; edges.push([u, v]); if (--degree[v] === 1) insertSorted(leaves, v); } edges.push([leaves[0], leaves[1]]); return edges; }
 function getEdges_Chain(n) { let edges = []; for (let i = 1; i < n; i++) edges.push([i, i + 1]); return edges; }
 function getEdges_Daisy(n) { let edges = []; for (let i = 2; i <= n; i++) edges.push([1, i]); return edges; }
 function getEdges_Binary(n) { let edges = []; for (let i = 1; i <= n; i++) { if (i * 2 <= n) edges.push([i, i * 2]); if (i * 2 + 1 <= n) edges.push([i, i * 2 + 1]); } return edges; }
 function getEdges_Graph(n, m, isDirected) { let set = new Set(), edges = []; let maxEdges = isDirected ? n * (n - 1) : n * (n - 1) / 2; m = Math.min(m, maxEdges); while (set.size < m) { let u = rand(1, n), v = rand(1, n); if (u === v) continue; if (!isDirected && u > v) [u, v] = [v, u]; let key = `${u}-${v}`; if (!set.has(key)) { set.add(key); edges.push([u, v]); } } return edges; }
 
-// 新增：仙人掌图生成 (节点扩展法，确保没有边属于两个环)
 function getEdges_Cactus(n) {
-    if (n <= 1) return [];
-    let edges = [], active = [1], unused = [];
+    if (n <= 1) return []; let edges = [], active = [1], unused = [];
     for (let i = 2; i <= n; i++) unused.push(i);
-    unused.sort(() => Math.random() - 0.5); // 随机打乱
-    
+    unused.sort(() => Math.random() - 0.5);
     while (unused.length > 0) {
         let u = active[rand(0, active.length - 1)];
-        // 如果剩余节点足够，有 70% 概率生成环，否则生成普通单边
         if (unused.length >= 2 && Math.random() < 0.7) {
-            let cycleLen = rand(3, Math.min(5, unused.length + 1));
-            let prev = u;
+            let cycleLen = rand(3, Math.min(5, unused.length + 1)); let prev = u;
             for (let i = 0; i < cycleLen - 1; i++) {
-                let curr = unused.pop();
-                edges.push([prev, curr]);
-                active.push(curr);
-                prev = curr;
-                if (i === cycleLen - 2) edges.push([curr, u]); // 闭合环
+                let curr = unused.pop(); edges.push([prev, curr]); active.push(curr); prev = curr;
+                if (i === cycleLen - 2) edges.push([curr, u]);
             }
-        } else {
-            let v = unused.pop();
-            edges.push([u, v]);
-            active.push(v);
-        }
+        } else { let v = unused.pop(); edges.push([u, v]); active.push(v); }
     }
     return edges;
 }
 
-// 新增：二分图生成 (划分两个不相交集合连边)
 function getEdges_Bipartite(n, m, isDirected) {
     let set1 = [], set2 = [];
     for (let i = 1; i <= n; i++) { if (Math.random() > 0.5) set1.push(i); else set2.push(i); }
-    if (set1.length === 0) set1.push(set2.pop());
-    if (set2.length === 0) set2.push(set1.pop());
-    
+    if (set1.length === 0) set1.push(set2.pop()); if (set2.length === 0) set2.push(set1.pop());
     let maxE = isDirected ? (set1.length * set2.length * 2) : (set1.length * set2.length);
     m = Math.min(m, maxE);
-    
     let edges = [], existing = new Set(), attempts = 0;
     while (edges.length < m && attempts < m * 10) {
-        attempts++;
-        let u = set1[rand(0, set1.length - 1)], v = set2[rand(0, set2.length - 1)];
+        attempts++; let u = set1[rand(0, set1.length - 1)], v = set2[rand(0, set2.length - 1)];
         if (isDirected && Math.random() > 0.5) [u, v] = [v, u];
         let key = isDirected ? `${u}->${v}` : (u < v ? `${u}-${v}` : `${v}-${u}`);
         if (!existing.has(key)) { existing.add(key); edges.push([u, v]); }
@@ -106,15 +88,76 @@ function initNetwork() {
     network.on("zoom", closeContextMenu);
 }
 
+// 核心函数：实时校验当前图的性质，动态显示/隐藏相关布局按钮
+function updateLayoutButtonsVisibility() {
+    const treeBox = document.getElementById('treeLayoutBox');
+    const bipBtn = document.getElementById('bipartiteLayoutBtn');
+    if (!nodesDataset || !edgesDataset || !treeBox || !bipBtn) return;
+
+    const nodes = nodesDataset.getIds();
+    const edges = edgesDataset.get();
+    const n = nodes.length;
+
+    if (n === 0) { 
+        treeBox.style.display = 'none'; 
+        bipBtn.style.display = 'none'; 
+        return; 
+    }
+
+    // 建立无向图邻接表与边去重（用于连通性与环检测）
+    let adj = {}, edgeCount = 0, seenEdges = new Set();
+    nodes.forEach(id => adj[id] = []);
+    
+    edges.forEach(e => {
+        let u = String(e.from), v = String(e.to);
+        if (u === v) { adj[u].push(u); } // 自环破坏二分图与树性质
+        else {
+            let key = u < v ? `${u}-${v}` : `${v}-${u}`;
+            if (!seenEdges.has(key)) { seenEdges.add(key); edgeCount++; }
+            adj[u].push(v); adj[v].push(u);
+        }
+    });
+
+    let isBipartite = true;
+    let color = {};
+    let connectedComponents = 0;
+
+    // BFS 遍历所有连通块并染色
+    for (let i = 0; i < n; i++) {
+        let startNode = nodes[i];
+        if (color[startNode] === undefined) {
+            connectedComponents++;
+            let q = [startNode]; color[startNode] = 0;
+            while (q.length > 0) {
+                let u = q.shift();
+                for (let v of adj[u]) {
+                    if (color[v] === undefined) {
+                        color[v] = 1 - color[u]; q.push(v);
+                    } else if (color[v] === color[u]) {
+                        isBipartite = false; // 存在奇数环
+                    }
+                }
+            }
+        }
+    }
+
+    // 判断树：严格连通（连通块为1）且 无向边数恰好为 n - 1 (无环)
+    let isTree = (connectedComponents === 1 && edgeCount === n - 1);
+
+    // 动态调整显隐
+    treeBox.style.display = isTree ? '' : 'none';
+    bipBtn.style.display = isBipartite ? '' : 'none';
+}
+
 window.renderGraphFromText = function() {
     if (!nodesDataset || !edgesDataset) return;
     let isDirected = document.getElementById('isDirected').value === 'true'; 
     network.setOptions({ edges: { arrows: { to: { enabled: isDirected } } } });
     
     const text = document.getElementById('output').value.trim(); 
-    if (!text) { nodesDataset.clear(); edgesDataset.clear(); return; }
+    if (!text) { nodesDataset.clear(); edgesDataset.clear(); updateLayoutButtonsVisibility(); return; }
     const lines = text.split('\n').map(l => l.trim()).filter(l => l !== ''); 
-    if (lines.length === 0) { nodesDataset.clear(); edgesDataset.clear(); return; }
+    if (lines.length === 0) { nodesDataset.clear(); edgesDataset.clear(); updateLayoutButtonsVisibility(); return; }
 
     let uniqueNodes = new Set(), newEdges = [];
     lines.forEach(line => {
@@ -138,6 +181,10 @@ window.renderGraphFromText = function() {
 
     edgesDataset.clear(); 
     edgesDataset.add(newEdges); 
+    
+    // 数据刷新完毕后验证数学性质更新UI
+    updateLayoutButtonsVisibility();
+
     setTimeout(() => { window.forcePhysicsUpdate(); }, 10);
 }
 
@@ -166,13 +213,12 @@ window.formatAsTree = function() {
     setTimeout(() => { let positions = network.getPositions(); network.setOptions({ layout: { hierarchical: { enabled: false } } }); nodesDataset.update(nodesDataset.get().map(node => { let style = getStyleObject(node, { isPinned: true }); if (positions[node.id]) { style.x = positions[node.id].x; style.y = positions[node.id].y; } return style; })); window.forcePhysicsUpdate(); network.fit({ animation: { duration: 600 } }); }, 50);
 }
 
-// 新增：二分图左右排版 (BFS 2-Coloring)
 window.formatAsBipartite = function() {
     if (!network || !nodesDataset) return;
     let adj = {}; nodesDataset.getIds().forEach(id => adj[id] = []);
     edgesDataset.get().forEach(e => { adj[e.from].push(e.to); adj[e.to].push(e.from); });
     
-    let color = {}, isBipartite = true;
+    let color = {};
     nodesDataset.getIds().forEach(startNode => {
         if (color[startNode] === undefined) {
             let q = [startNode]; color[startNode] = 0;
@@ -180,14 +226,11 @@ window.formatAsBipartite = function() {
                 let u = q.shift();
                 adj[u].forEach(v => {
                     if (color[v] === undefined) { color[v] = 1 - color[u]; q.push(v); } 
-                    else if (color[v] === color[u]) { isBipartite = false; }
                 });
             }
         }
     });
 
-    if (!isBipartite) alert("检测到奇数环，当前输入并非严格的二分图！强制左右排版可能会有连线交叉。");
-    
     nodesDataset.update(nodesDataset.get().map(n => ({ id: n.id, level: color[n.id] !== undefined ? color[n.id] : 0 })));
     const currentEdgeLen = parseInt(document.getElementById('edgeLength').value) || 100;
     
@@ -220,7 +263,6 @@ window.saveEdgeConfig = function() {
     }
 }
 
-// 修改：将二分图也加入可自由设定边数 M 的范围
 window.updateInputs = function() {
     const n = parseInt(document.getElementById('n').value), mInput = document.getElementById('m'), maxwInput = document.getElementById('maxw'), struct = document.getElementById('graphStructure').value, isDirSelect = document.getElementById('isDirected'), isWSelect = document.getElementById('isWeighted');
     if (['graph', 'bipartite'].includes(struct)) { 
