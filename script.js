@@ -4,7 +4,33 @@ function insertSorted(arr, val) { let low = 0, high = arr.length - 1; while (low
 function getEdges_Tree(n) { if (n <= 1) return []; if (n === 2) return [[1, 2]]; let edges = [], degree = new Array(n + 1).fill(1), sequence = []; for (let i = 0; i < n - 2; i++) { let node = rand(1, n); sequence.push(node); degree[node]++; } let leaves = []; for (let i = 1; i <= n; i++) if (degree[i] === 1) leaves.push(i); leaves.sort((a, b) => a - b); for (let i = 0; i < n - 2; i++) { let u = leaves.shift(), v = sequence[i]; edges.push([u, v]); if (--degree[v] === 1) insertSorted(leaves, v); } edges.push([leaves[0], leaves[1]]); return edges; }
 function getEdges_Chain(n) { let edges = []; for (let i = 1; i < n; i++) edges.push([i, i + 1]); return edges; }
 function getEdges_Daisy(n) { let edges = []; for (let i = 2; i <= n; i++) edges.push([1, i]); return edges; }
-function getEdges_Binary(n) { let edges = []; for (let i = 1; i <= n; i++) { if (i * 2 <= n) edges.push([i, i * 2]); if (i * 2 + 1 <= n) edges.push([i, i * 2 + 1]); } return edges; }
+
+// === 更新：生成真正的随机二叉树 ===
+function getEdges_Binary(n) { 
+    if (n <= 1) return [];
+    let edges = [];
+    let childCount = new Array(n + 1).fill(0);
+    // 维护一个"还可以接入子节点"的候选池
+    let available = [1];
+    
+    for (let i = 2; i <= n; i++) {
+        // 随机挑一个还有空位的父节点
+        let randIdx = rand(0, available.length - 1);
+        let u = available[randIdx];
+        
+        edges.push([u, i]);
+        childCount[u]++;
+        
+        // 如果该父节点已经满2个孩子了，移出候选池
+        if (childCount[u] === 2) {
+            available.splice(randIdx, 1);
+        }
+        // 新节点入池
+        available.push(i);
+    }
+    return edges; 
+}
+
 function getEdges_Graph(n, m, isDirected) { let set = new Set(), edges = []; let maxEdges = isDirected ? n * (n - 1) : n * (n - 1) / 2; m = Math.min(m, maxEdges); while (set.size < m) { let u = rand(1, n), v = rand(1, n); if (u === v) continue; if (!isDirected && u > v) [u, v] = [v, u]; let key = `${u}-${v}`; if (!set.has(key)) { set.add(key); edges.push([u, v]); } } return edges; }
 
 function getEdges_Cactus(n, m) {
