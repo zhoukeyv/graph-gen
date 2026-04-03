@@ -5,7 +5,6 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; display: flex; height: 10
 .sidebar { width: 340px; background: #fff; padding: 20px; box-shadow: 2px 0 10px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 14px; z-index: 10; }
 .sidebar h2 { font-size: 18px; margin-bottom: 5px; color: #111827; }
 
-/* 新增：下拉控制面板样式 */
 .gen-box { border: 1px solid var(--border-color); border-radius: 6px; background: #fff; }
 .gen-box summary { padding: 10px 14px; font-size: 14px; font-weight: 600; cursor: pointer; background: #f9fafb; outline: none; user-select: none; border-radius: 6px; transition: 0.2s; }
 .gen-box summary:hover { color: var(--primary); }
@@ -14,7 +13,7 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; display: flex; height: 10
 
 .form-group { display: flex; align-items: center; justify-content: space-between; }
 .form-group label { font-size: 14px; color: #4b5563; font-weight: 500;}
-.form-group input, .form-group select { width: 150px; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; outline: none; transition: 0.2s; }
+.form-group input, .form-group select { width: 145px; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; outline: none; transition: 0.2s; }
 .form-group input:focus, .form-group select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(78,110,242,0.1); }
 .form-group input:disabled { background: #f3f4f6; cursor: not-allowed; }
 
