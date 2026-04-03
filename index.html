@@ -49,14 +49,20 @@
             <button class="btn" onclick="unpinAll()">全部解除</button>
             <div class="divider"></div>
             
-            <!-- 增加了 id="treeLayoutBox" -->
-            <div class="tree-layout-box" id="treeLayoutBox">
-                <button class="btn-tree" onclick="formatAsTree()">树状排版</button>
-                <div class="tree-input-wrapper"><span class="tree-label">根:</span><input type="text" id="treeRootInput" value="1" title="设置树的根节点标识符"></div>
+            <!-- 树状排版 (仅树图显示) -->
+            <div class="layout-box" id="treeLayoutBox" style="display:none;">
+                <button class="btn-layout" onclick="formatAsTree()">树状排版</button>
+                <div class="layout-input-wrapper"><span class="layout-label">根:</span><input type="text" id="treeRootInput" class="layout-input" value="1" title="设置树的根节点"></div>
             </div>
             
-            <!-- 增加了 id="bipartiteLayoutBtn" -->
-            <button class="btn" id="bipartiteLayoutBtn" style="height:36px; border-color:var(--primary); color:var(--primary);" onclick="formatAsBipartite()">二分图排版(左右)</button>
+            <!-- 仙人掌排版 (仅仙人掌且带环显示) -->
+            <div class="layout-box" id="cactusLayoutBox" style="display:none;">
+                <button class="btn-layout" onclick="formatAsCactus()">仙人掌排版</button>
+                <div class="layout-input-wrapper"><span class="layout-label">心:</span><input type="text" id="cactusRootInput" class="layout-input" value="1" title="设置放射中心节点"></div>
+            </div>
+
+            <!-- 二分图排版 (仅二分图显示) -->
+            <button class="btn-layout-standalone" id="bipartiteLayoutBtn" style="display:none;" onclick="formatAsBipartite()">二分图排版</button>
         </div>
         <div id="mynetwork"></div>
     </div>
