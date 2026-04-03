@@ -292,7 +292,6 @@ window.toggleBCTreeMode = function() {
     let nodesStr = nodesDataset.getIds().map(String);
     let originalEdges = edgesDataset.get();
 
-    // 默认根节点预填为编号1（如果没有则选第一个）
     let defaultRoot = nodesStr.includes("1") ? "1" : nodesStr[0];
     document.getElementById('bcTreeRootInput').value = defaultRoot;
 
@@ -306,7 +305,6 @@ window.toggleBCTreeMode = function() {
     });
     savedOriginalEdges = originalEdges;
 
-    // 构建图数据
     let newNodes = [], newEdges = [];
     savedOriginalNodes.forEach(n => {
         let clone = Object.assign({}, n);
@@ -318,6 +316,8 @@ window.toggleBCTreeMode = function() {
         newNodes.push(clone);
     });
 
+    let baseSize = parseInt(document.getElementById('nodeSize').value) || 20;
+
     blocks.forEach((b, i) => {
         let sqId = `_square_${i}`;
         let cx = 0, cy = 0;
@@ -325,9 +325,10 @@ window.toggleBCTreeMode = function() {
         cx /= b.nodes.length; cy /= b.nodes.length;
 
         newNodes.push({
-            id: sqId, label: '方', shape: 'square', size: parseInt(document.getElementById('nodeSize').value) * 1.2,
+            id: sqId, label: '方', shape: 'square', 
+            size: baseSize * 0.7, // 缩小方点的基础尺寸
             color: { background: '#f4a261', border: '#e76f51', highlight: { background: '#f4a261', border: '#e76f51' } },
-            font: { color: '#fff', face: 'Arial, sans-serif' },
+            font: { color: '#fff', face: 'Arial, sans-serif', size: baseSize * 0.7 }, // 缩小方点的字体以匹配体积
             fixed: {x: true, y: true},
             x: cx, y: cy,
             isPinned: true,
@@ -350,7 +351,6 @@ window.toggleBCTreeMode = function() {
     network.fit({ animation: { duration: 600 } });
 }
 
-// 供切换按钮与输入框回车共用的核心树状排版执行逻辑
 window.applyBCTreeTreeLayout = function() {
     let nodes = nodesDataset.getIds();
     let rootId = document.getElementById('bcTreeRootInput').value.trim();
@@ -375,7 +375,15 @@ window.applyBCTreeTreeLayout = function() {
 
     const currentEdgeLen = parseInt(document.getElementById('edgeLength').value) || 100;
     network.setOptions({
-        layout: { hierarchical: { enabled: true, direction: 'UD', sortMethod: 'directed', nodeSpacing: currentEdgeLen * 1.5, levelSeparation: currentEdgeLen * 1.8 } },
+        layout: { 
+            hierarchical: { 
+                enabled: true, 
+                direction: 'UD', 
+                sortMethod: 'directed', 
+                nodeSpacing: currentEdgeLen * 0.8,      // 大幅缩减横向间距
+                levelSeparation: currentEdgeLen * 0.9   // 大幅缩减纵向层级间距
+            } 
+        },
         physics: { enabled: false }
     });
 
@@ -398,7 +406,6 @@ window.toggleBCTreeLayout = function() {
     const btn = document.getElementById('bcTreeLayoutBtn');
 
     if (isBCTreeTreeLayout) {
-        // 退回几何排版
         network.setOptions({ layout: { hierarchical: { enabled: false } }, physics: { enabled: false } });
         let updates = nodesDataset.get().map(node => {
             let style = getStyleObject(node, { isPinned: true });
@@ -414,7 +421,6 @@ window.toggleBCTreeLayout = function() {
         btn.innerText = "圆方树：树状排版";
         isBCTreeTreeLayout = false;
     } else {
-        // 执行树状排版
         if (applyBCTreeTreeLayout()) {
             btn.innerText = "圆方树：恢复几何";
             isBCTreeTreeLayout = true;
@@ -422,7 +428,6 @@ window.toggleBCTreeLayout = function() {
     }
 }
 
-// 当输入框内容发生改变（失焦/回车）时，如果在树状模式，直接无缝更新视图
 window.updateBCTreeLayoutRoot = function() {
     if (isBCTreeMode && isBCTreeTreeLayout) {
         applyBCTreeTreeLayout();
