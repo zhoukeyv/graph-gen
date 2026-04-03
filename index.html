@@ -68,6 +68,12 @@
                     <input type="text" id="bcTreeRootInput" class="layout-input" value="1" title="设置圆方树的根节点 (回车生效)" onchange="updateBCTreeLayoutRoot()" onkeydown="if(event.key==='Enter') updateBCTreeLayoutRoot()">
                 </div>
             </div>
+
+            <!-- ====== 新增：导出图片功能 ====== -->
+            <div class="divider"></div>
+            <button class="btn" onclick="exportImage('png')" title="导出带有透明背景的 PNG 图片">导出 PNG</button>
+            <button class="btn" onclick="exportImage('jpeg')" title="导出带有白色背景的 JPG 图片">导出 JPG</button>
+            <!-- ================================= -->
         </div>
         <div id="mynetwork"></div>
     </div>
