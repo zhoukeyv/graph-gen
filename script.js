@@ -12,11 +12,9 @@ function getEdges_Cactus(n, m) {
     let max_m = n - 1 + Math.floor((n - 1) / 2);
     m = Math.max(n - 1, Math.min(m, max_m)); 
     let extra_edges = m - (n - 1); 
-    
     let edges = [], active = [1], unused = [];
     for (let i = 2; i <= n; i++) unused.push(i);
     unused.sort(() => Math.random() - 0.5);
-
     while (unused.length > 0) {
         let u = active[rand(0, active.length - 1)];
         if (unused.length >= 2 && extra_edges > 0) {
@@ -57,6 +55,11 @@ function darkenHex(hex, factor = 0.2) { if (!hex || !hex.startsWith('#')) return
 let nodesDataset = null, edgesDataset = null, network = null, contextNodeId = null, contextEdgeId = null;
 const PHYSICS_CONFIG = { gravitationalConstant: -40, centralGravity: 0.01, springConstant: 0.08, damping: 0.8 };
 
+// 圆方树模式状态变量
+let isBCTreeMode = false;
+let savedOriginalNodes = null;
+let savedOriginalEdges = null;
+
 window.forcePhysicsUpdate = function() {
     if (!network) return;
     const currentEdgeLen = parseInt(document.getElementById('edgeLength').value) || 100;
@@ -69,8 +72,13 @@ function getStyleObject(node, updates) {
     let isPinned = updates.isPinned !== undefined ? updates.isPinned : (node.isPinned || false);
     let customBorder = updates.customColor !== undefined ? updates.customColor : (node.customColor || '#4e6ef2');
     let label = updates.label !== undefined ? updates.label : (node.label || '');
+    let shape = updates.shape !== undefined ? updates.shape : (node.shape || 'circle');
     let hoverBorder = darkenHex(customBorder, 0.2); 
-    return { id: node.id || updates.id, label: label, isPinned: isPinned, customColor: customBorder, fixed: isPinned ? { x: true, y: true } : { x: false, y: false }, borderWidth: isPinned ? 4 : 2, borderWidthSelected: isPinned ? 4 : 2, color: { background: isPinned ? '#f3f4f6' : '#ffffff', border: customBorder, highlight: { background: isPinned ? '#e5e7eb' : '#f0f4ff', border: customBorder }, hover: { background: isPinned ? '#e5e7eb' : '#f8f9fa', border: hoverBorder } }, shadow: isPinned ? { enabled: true, color: 'rgba(0,0,0,0.3)', size: 8, x: 2, y: 2 } : true };
+    
+    let colorObj = { background: isPinned ? '#f3f4f6' : '#ffffff', border: customBorder, highlight: { background: isPinned ? '#e5e7eb' : '#f0f4ff', border: customBorder }, hover: { background: isPinned ? '#e5e7eb' : '#f8f9fa', border: hoverBorder } };
+    if (updates.forceColor) colorObj = updates.forceColor; // 用于强制重写方点颜色
+
+    return { id: node.id || updates.id, label: label, shape: shape, isPinned: isPinned, customColor: customBorder, fixed: isPinned ? { x: true, y: true } : { x: false, y: false }, borderWidth: isPinned ? 4 : 2, borderWidthSelected: isPinned ? 4 : 2, color: colorObj, shadow: isPinned ? { enabled: true, color: 'rgba(0,0,0,0.3)', size: 8, x: 2, y: 2 } : true };
 }
 
 function updateNodeStyle(nodeId, updates) { let node = nodesDataset.get(nodeId); if (!node) return; nodesDataset.update(getStyleObject(node, updates)); }
@@ -86,10 +94,11 @@ function initNetwork() {
         interaction: { hover: true, tooltipDelay: 200, multiselect: true }
     };
     network = new vis.Network(container, { nodes: nodesDataset, edges: edgesDataset }, options);
-    network.on("click", function (params) { if (params.event.srcEvent.shiftKey && params.nodes.length > 0) { updateNodeStyle(params.nodes[0], { isPinned: !nodesDataset.get(params.nodes[0]).isPinned }); network.unselectAll(); window.forcePhysicsUpdate(); closeContextMenu(); return; } closeContextMenu(); });
+    network.on("click", function (params) { if (isBCTreeMode) return; if (params.event.srcEvent.shiftKey && params.nodes.length > 0) { updateNodeStyle(params.nodes[0], { isPinned: !nodesDataset.get(params.nodes[0]).isPinned }); network.unselectAll(); window.forcePhysicsUpdate(); closeContextMenu(); return; } closeContextMenu(); });
     network.on("dragStart", function(params) { closeContextMenu(); if (params.nodes.length > 0) { const node = nodesDataset.get(params.nodes[0]); if (node && node.isPinned) nodesDataset.update({ id: node.id, fixed: { x: false, y: false } }); } });
     network.on("dragEnd", function(params) { if (params.nodes.length > 0) { const node = nodesDataset.get(params.nodes[0]); if (node && node.isPinned) nodesDataset.update({ id: node.id, fixed: { x: true, y: true } }); } });
     network.on("oncontext", function (params) {
+        if (isBCTreeMode) { closeContextMenu(); return; } // 圆方树模式禁止修改操作
         params.event.preventDefault(); const nodeId = network.getNodeAt(params.pointer.DOM); const edgeId = network.getEdgeAt(params.pointer.DOM);
         if (nodeId !== undefined) {
             contextNodeId = nodeId; contextEdgeId = null; const node = nodesDataset.get(nodeId); document.getElementById('edgeContextMenu').style.display = 'none'; const menu = document.getElementById('contextMenu'); menu.style.left = (params.event.clientX + window.scrollX + 10) + 'px'; menu.style.top = (params.event.clientY + window.scrollY + 10) + 'px'; menu.style.display = 'flex'; document.getElementById('nodeLabelInput').value = node.label || String(nodeId); document.getElementById('nodeColorInput').value = node.customColor || '#4e6ef2'; setTimeout(() => { document.getElementById('nodeLabelInput').focus(); document.getElementById('nodeLabelInput').select(); }, 50); 
@@ -101,22 +110,18 @@ function initNetwork() {
 }
 
 function updateLayoutButtonsVisibility() {
-    const treeBox = document.getElementById('treeLayoutBox'), bipBtn = document.getElementById('bipartiteLayoutBtn'), cactusBox = document.getElementById('cactusLayoutBox');
+    const treeBox = document.getElementById('treeLayoutBox'), bipBtn = document.getElementById('bipartiteLayoutBtn'), cactusBox = document.getElementById('cactusLayoutBox'), bcTreeBtn = document.getElementById('bcTreeBtn');
     if (!nodesDataset || !edgesDataset || !treeBox || !bipBtn || !cactusBox) return;
 
     const nodes = nodesDataset.getIds().map(String), edges = edgesDataset.get(), n = nodes.length;
-    if (n === 0) { treeBox.style.display = 'none'; bipBtn.style.display = 'none'; cactusBox.style.display = 'none'; return; }
+    if (n === 0) { treeBox.style.display = 'none'; bipBtn.style.display = 'none'; cactusBox.style.display = 'none'; bcTreeBtn.style.display = 'none'; return; }
 
     let adj = {}, edgeCount = 0, seenEdges = new Set();
     nodes.forEach(id => adj[id] = []);
     edges.forEach(e => {
         let u = String(e.from), v = String(e.to);
         if (u === v) { adj[u].push(u); } 
-        else {
-            let key = u < v ? `${u}-${v}` : `${v}-${u}`;
-            if (!seenEdges.has(key)) { seenEdges.add(key); edgeCount++; }
-            adj[u].push(v); adj[v].push(u);
-        }
+        else { let key = u < v ? `${u}-${v}` : `${v}-${u}`; if (!seenEdges.has(key)) { seenEdges.add(key); edgeCount++; } adj[u].push(v); adj[v].push(u); }
     });
 
     let isBipartite = true, color = {}, connectedComponents = 0;
@@ -126,10 +131,7 @@ function updateLayoutButtonsVisibility() {
             connectedComponents++; let q = [startNode]; color[startNode] = 0;
             while (q.length > 0) {
                 let u = q.shift();
-                for (let v of adj[u]) {
-                    if (color[v] === undefined) { color[v] = 1 - color[u]; q.push(v); } 
-                    else if (color[v] === color[u]) { isBipartite = false; }
-                }
+                for (let v of adj[u]) { if (color[v] === undefined) { color[v] = 1 - color[u]; q.push(v); } else if (color[v] === color[u]) { isBipartite = false; } }
             }
         }
     }
@@ -146,13 +148,8 @@ function updateLayoutButtonsVisibility() {
                 if (dfn[v]) {
                     if (dfn[v] < dfn[u]) { 
                         let curr = u, cycleEdges = [getEdgeKey(u, v)];
-                        while (curr !== v && curr !== null) {
-                            let pNode = parent[curr]; if (pNode) cycleEdges.push(getEdgeKey(curr, pNode)); curr = pNode;
-                        }
-                        for (let ek of cycleEdges) {
-                            edgeCycleCount[ek] = (edgeCycleCount[ek] || 0) + 1;
-                            if (edgeCycleCount[ek] > 1) isCactus = false;
-                        }
+                        while (curr !== v && curr !== null) { let pNode = parent[curr]; if (pNode) cycleEdges.push(getEdgeKey(curr, pNode)); curr = pNode; }
+                        for (let ek of cycleEdges) { edgeCycleCount[ek] = (edgeCycleCount[ek] || 0) + 1; if (edgeCycleCount[ek] > 1) isCactus = false; }
                     }
                 } else { dfs(v, u); }
             }
@@ -163,9 +160,127 @@ function updateLayoutButtonsVisibility() {
     treeBox.style.display = isTree ? '' : 'none';
     bipBtn.style.display = isBipartite ? '' : 'none';
     cactusBox.style.display = (isCactus && edgeCount >= n) ? '' : 'none'; 
+    
+    // 圆方树按钮显示条件：是无向图并且至少有1条边
+    let isDir = document.getElementById('isDirected').value === 'true';
+    bcTreeBtn.style.display = (!isDir && edgeCount > 0) ? '' : 'none';
 }
 
+// ============== 圆方树展示核心逻辑 ==============
+window.toggleBCTreeMode = function() {
+    const btn = document.getElementById('bcTreeBtn');
+    if (isBCTreeMode) {
+        // 退回正常模式
+        isBCTreeMode = false;
+        btn.innerText = "圆方树展示";
+        btn.style.backgroundColor = ""; // 恢复默认样式
+        setUIElementsLock(false);
+        
+        // 恢复原有节点和边，且保留它们之前的物理坐标
+        nodesDataset.clear(); edgesDataset.clear();
+        nodesDataset.add(savedOriginalNodes);
+        edgesDataset.add(savedOriginalEdges);
+        savedOriginalNodes = null; savedOriginalEdges = null;
+        
+        window.forcePhysicsUpdate();
+        return;
+    }
+
+    // 开启圆方树模式
+    isBCTreeMode = true;
+    btn.innerText = "取消圆方树";
+    btn.style.backgroundColor = "#e63946"; // 变成红色警示状态
+    setUIElementsLock(true);
+
+    // 抓取当前物理引擎中的精准坐标以备恢复
+    let positions = network.getPositions();
+    savedOriginalNodes = nodesDataset.get().map(n => { let clone = Object.assign({}, n); if(positions[n.id]) { clone.x = positions[n.id].x; clone.y = positions[n.id].y; } return clone; });
+    savedOriginalEdges = edgesDataset.get();
+
+    // 运行 Tarjan 求双连通分量 (BCC)
+    let nodes = savedOriginalNodes.map(n => String(n.id));
+    let adj = {}; nodes.forEach(n => adj[n] = []);
+    savedOriginalEdges.forEach(e => {
+        let u = String(e.from), v = String(e.to);
+        if (u !== v) { adj[u].push(v); adj[v].push(u); }
+    });
+
+    let dfn = {}, low = {}, timer = 0, stack = [], bccList = [];
+    function tarjan(u, p) {
+        dfn[u] = low[u] = ++timer;
+        stack.push(u);
+        for (let v of adj[u]) {
+            if (v === p) continue;
+            if (!dfn[v]) {
+                tarjan(v, u);
+                low[u] = Math.min(low[u], low[v]);
+                if (low[v] >= dfn[u]) {
+                    let bcc = [], node;
+                    do { node = stack.pop(); bcc.push(node); } while (node !== v);
+                    bcc.push(u);
+                    bccList.push(bcc);
+                }
+            } else { low[u] = Math.min(low[u], dfn[v]); }
+        }
+    }
+    nodes.forEach(u => { if (!dfn[u]) tarjan(u, null); });
+
+    // 构造新图
+    let newNodes = [], newEdges = [];
+    // 圆点保持原样，强制解除固定状态让它们自然散开
+    savedOriginalNodes.forEach(n => {
+        let clone = Object.assign({}, n);
+        clone.shape = 'circle'; clone.fixed = false; clone.isPinned = false; clone.color.background = '#ffffff'; clone.color.border = clone.customColor || '#4e6ef2';
+        newNodes.push(clone);
+    });
+
+    // 方点生成
+    bccList.forEach((bcc, i) => {
+        let sqId = `_square_${i}`;
+        newNodes.push({
+            id: sqId, label: '方', shape: 'square', size: parseInt(document.getElementById('nodeSize').value) * 1.2,
+            color: { background: '#f4a261', border: '#e76f51', highlight: { background: '#f4a261', border: '#e76f51' } },
+            font: { color: '#fff', face: 'Arial, sans-serif' },
+            fixed: false
+        });
+        bcc.forEach(u => {
+            newEdges.push({
+                from: sqId, to: u, color: { color: '#e76f51' }, width: 3, dashes: true, smooth: { type: 'continuous' }
+            });
+        });
+    });
+
+    edgesDataset.clear(); nodesDataset.clear();
+    nodesDataset.add(newNodes); edgesDataset.add(newEdges);
+
+    // 让物理引擎以树的形态自然弹开
+    let currentEdgeLen = parseInt(document.getElementById('edgeLength').value) || 100;
+    network.setOptions({ physics: { enabled: true, solver: 'forceAtlas2Based', forceAtlas2Based: Object.assign({}, PHYSICS_CONFIG, { springLength: currentEdgeLen * 1.5, centralGravity: 0.005 }) } });
+    network.startSimulation();
+}
+
+function setUIElementsLock(locked) {
+    document.getElementById('output').disabled = locked;
+    document.getElementById('n').disabled = locked;
+    document.getElementById('m').disabled = locked;
+    document.getElementById('graphStructure').disabled = locked;
+    document.getElementById('isDirected').disabled = locked;
+    document.getElementById('isWeighted').disabled = locked;
+    document.getElementById('btnGenerate').disabled = locked;
+    
+    let opacity = locked ? '0.4' : '1';
+    let ptrEvents = locked ? 'none' : 'auto';
+    
+    const elementsToLock = ['treeLayoutBox', 'cactusLayoutBox', 'bipartiteLayoutBtn', 'nodeSize', 'edgeLength'];
+    elementsToLock.forEach(id => {
+        let el = document.getElementById(id);
+        if (el) { el.style.opacity = opacity; el.style.pointerEvents = ptrEvents; }
+    });
+}
+// ============== 结束 ==============
+
 window.renderGraphFromText = function() {
+    if (isBCTreeMode) return;
     if (!nodesDataset || !edgesDataset) return;
     let isDirected = document.getElementById('isDirected').value === 'true'; 
     network.setOptions({ edges: { arrows: { to: { enabled: isDirected } } } });
@@ -200,6 +315,7 @@ window.renderGraphFromText = function() {
 }
 
 document.addEventListener('keydown', e => {
+    if (isBCTreeMode) return;
     if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
     let color = null; if (e.code === 'KeyR') color = '#e63946'; else if (e.code === 'KeyB') color = '#4e6ef2'; else if (e.code === 'KeyG') color = '#2a9d8f'; else if (e.code === 'KeyY') color = '#f4a261'; else if (e.code === 'KeyP') color = '#9d4edd'; else if (e.code === 'KeyD') color = '#333333';
     if (color && network) { let selectedNodes = network.getSelectedNodes(); if (selectedNodes.length > 0) { e.preventDefault(); let updates = selectedNodes.map(id => { let node = nodesDataset.get(id); let currentColor = node.customColor || '#4e6ef2'; return getStyleObject(node, { customColor: (currentColor === color) ? '#4e6ef2' : color }); }); nodesDataset.update(updates); } }
@@ -272,7 +388,6 @@ function getCactusBlocks(nodes, edges) {
     return blocks;
 }
 
-// 终极完美正多边形仙人掌排版（100%全自动寻找枢纽割点，无需输入）
 window.formatAsCactus = function() {
     if (!network || !nodesDataset) return;
     let nodes = nodesDataset.getIds().map(String), edges = edgesDataset.get();
@@ -280,18 +395,15 @@ window.formatAsCactus = function() {
     let nodeToBlocks = {}; nodes.forEach(n => nodeToBlocks[n] = []);
     blocks.forEach((b, i) => { b.nodes.forEach(n => nodeToBlocks[n].push(i)); });
     
-    // 【完全自动化】遍历寻找全图连接块数最多、最核心的“超级割点”作为排版中心
     let startNode = nodes[0], maxBlocks = -1;
     nodes.forEach(u => {
         let bCount = nodeToBlocks[u].length;
         if (bCount > maxBlocks) { maxBlocks = bCount; startNode = u; }
     });
 
-    // 递归计算整棵树各个子分支的节点规模
     let nodeWeight = {}, blockWeight = {};
     function computeWeight(u, pBlock) {
-        let w = 1;
-        let childBlocks = nodeToBlocks[u].filter(bIdx => bIdx !== pBlock);
+        let w = 1; let childBlocks = nodeToBlocks[u].filter(bIdx => bIdx !== pBlock);
         for (let bIdx of childBlocks) {
             let b = blocks[bIdx], bw = 0;
             for (let v of b.nodes) { if (v !== u) bw += computeWeight(v, bIdx); }
@@ -303,21 +415,18 @@ window.formatAsCactus = function() {
     
     let pos = {}, placedNodes = new Set();
     pos[startNode] = { x: 0, y: 0 }; placedNodes.add(startNode);
-    // 稍微放大弹簧基础长度，给复杂的环留足空间
     const L_0 = (parseInt(document.getElementById('edgeLength').value) || 100) * 1.2;
     
-    // 纯粹严谨的几何排版递归
     function layoutNode(u, pBlock, baseAngle, angleRange) {
         let childBlocks = nodeToBlocks[u].filter(bIdx => bIdx !== pBlock);
         if (childBlocks.length === 0) return;
-        
         let totalW = childBlocks.reduce((sum, bIdx) => sum + blockWeight[bIdx], 0);
         let currentAngle = baseAngle - angleRange / 2;
         
         for (let bIdx of childBlocks) {
             let b = blocks[bIdx];
             let bw = blockWeight[bIdx];
-            let bRange = angleRange * (bw / totalW); // 依然按权重切分角度
+            let bRange = angleRange * (bw / totalW); 
             let bAngle = currentAngle + bRange / 2;
             
             if (b.type === 'bridge') {
@@ -328,37 +437,25 @@ window.formatAsCactus = function() {
                     layoutNode(v, bIdx, bAngle, bRange);
                 }
             } else {
-                let K = b.nodes.length;
-                let idx = b.nodes.indexOf(u);
-                let seq = [];
+                let K = b.nodes.length; let idx = b.nodes.indexOf(u); let seq = [];
                 for (let i = 0; i < K; i++) seq.push(b.nodes[(idx + i) % K]);
                 
-                // 利用正多边形外接圆公式计算几何中心
                 let R = L_0 / (2 * Math.sin(Math.PI / K)); 
                 let cx = pos[u].x + R * Math.cos(bAngle);
                 let cy = pos[u].y + R * Math.sin(bAngle);
-                
-                // u 到几何中心的夹角
                 let phi_0 = bAngle + Math.PI;
-                
                 let sumVWeights = 0;
                 for (let i = 1; i < K; i++) sumVWeights += nodeWeight[seq[i]];
                 if(sumVWeights === 0) sumVWeights = 1;
                 
                 for (let i = 1; i < K; i++) {
                     let v = seq[i];
-                    // 严格按照正多边形的节点相对中心的极角进行分布
                     let phi_i = phi_0 + i * (2 * Math.PI / K);
                     if (!placedNodes.has(v)) {
                         pos[v] = { x: cx + R * Math.cos(phi_i), y: cy + R * Math.sin(phi_i) };
                         placedNodes.add(v);
-                        
-                        // 子节点严格沿着该节点背离中心的法线方向发散
-                        let vW = nodeWeight[v];
-                        let vRange = bRange * (vW / sumVWeights);
-                        // 上限保护，防止某个极端大分支卷曲穿模
+                        let vW = nodeWeight[v]; let vRange = bRange * (vW / sumVWeights);
                         vRange = Math.min(vRange, 2 * Math.PI * 0.8); 
-                        
                         layoutNode(v, bIdx, phi_i, vRange);
                     }
                 }
@@ -367,15 +464,10 @@ window.formatAsCactus = function() {
         }
     }
     
-    // 中心大割点享受完整的 360 度 (2*PI) 无死角生长空间
     layoutNode(startNode, -1, 0, 2 * Math.PI);
     
     network.setOptions({ physics: { enabled: false } });
-    let updates = nodesDataset.get().map(node => {
-        let style = getStyleObject(node, { isPinned: true });
-        if (pos[node.id]) { style.x = pos[node.id].x; style.y = pos[node.id].y; }
-        return style;
-    });
+    let updates = nodesDataset.get().map(node => { let style = getStyleObject(node, { isPinned: true }); if (pos[node.id]) { style.x = pos[node.id].x; style.y = pos[node.id].y; } return style; });
     nodesDataset.update(updates); window.forcePhysicsUpdate(); network.fit({ animation: { duration: 600 } });
 }
 
@@ -406,30 +498,16 @@ window.updateInputs = function() {
     
     if (['graph', 'bipartite', 'cactus'].includes(struct)) { 
         mInput.disabled = false; 
-        if (struct === 'cactus') {
-            isDirSelect.value = "false";
-            isDirSelect.disabled = true;
-        } else {
-            isDirSelect.disabled = false;
-        }
-    } else { 
-        isDirSelect.value = "false"; isDirSelect.disabled = true; mInput.disabled = true; 
-    }
+        if (struct === 'cactus') { isDirSelect.value = "false"; isDirSelect.disabled = true; } else { isDirSelect.disabled = false; }
+    } else { isDirSelect.value = "false"; isDirSelect.disabled = true; mInput.disabled = true; }
     
     let isDir = isDirSelect.value === 'true'; 
     if (!isNaN(n)) {
         if (struct === 'cactus') {
-            mInput.min = n > 0 ? n - 1 : 0;
-            let maxCactusM = n > 0 ? n - 1 + Math.floor((n - 1) / 2) : 0;
-            mInput.max = maxCactusM;
-            if (parseInt(mInput.value) < mInput.min) mInput.value = mInput.min;
-            if (parseInt(mInput.value) > mInput.max) mInput.value = mInput.max;
-        } else {
-            mInput.min = 0;
-            mInput.max = isDir ? n * (n - 1) : Math.min(10000, n * (n - 1) / 2); 
-        }
+            mInput.min = n > 0 ? n - 1 : 0; let maxCactusM = n > 0 ? n - 1 + Math.floor((n - 1) / 2) : 0; mInput.max = maxCactusM;
+            if (parseInt(mInput.value) < mInput.min) mInput.value = mInput.min; if (parseInt(mInput.value) > mInput.max) mInput.value = mInput.max;
+        } else { mInput.min = 0; mInput.max = isDir ? n * (n - 1) : Math.min(10000, n * (n - 1) / 2); }
     }
-    
     maxwInput.disabled = (isWSelect.value === 'false');
     renderGraphFromText();
 }
