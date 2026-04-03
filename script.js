@@ -74,10 +74,7 @@ function getStyleObject(node, updates) {
     let label = updates.label !== undefined ? updates.label : (node.label || '');
     let shape = updates.shape !== undefined ? updates.shape : (node.shape || 'circle');
     let hoverBorder = darkenHex(customBorder, 0.2); 
-    
-    let colorObj = { background: isPinned ? '#f3f4f6' : '#ffffff', border: customBorder, highlight: { background: isPinned ? '#e5e7eb' : '#f0f4ff', border: customBorder }, hover: { background: isPinned ? '#e5e7eb' : '#f8f9fa', border: hoverBorder } };
-    if (updates.forceColor) colorObj = updates.forceColor; // 用于强制重写方点颜色
-
+    let colorObj = updates.color || { background: isPinned ? '#f3f4f6' : '#ffffff', border: customBorder, highlight: { background: isPinned ? '#e5e7eb' : '#f0f4ff', border: customBorder }, hover: { background: isPinned ? '#e5e7eb' : '#f8f9fa', border: hoverBorder } };
     return { id: node.id || updates.id, label: label, shape: shape, isPinned: isPinned, customColor: customBorder, fixed: isPinned ? { x: true, y: true } : { x: false, y: false }, borderWidth: isPinned ? 4 : 2, borderWidthSelected: isPinned ? 4 : 2, color: colorObj, shadow: isPinned ? { enabled: true, color: 'rgba(0,0,0,0.3)', size: 8, x: 2, y: 2 } : true };
 }
 
@@ -98,7 +95,7 @@ function initNetwork() {
     network.on("dragStart", function(params) { closeContextMenu(); if (params.nodes.length > 0) { const node = nodesDataset.get(params.nodes[0]); if (node && node.isPinned) nodesDataset.update({ id: node.id, fixed: { x: false, y: false } }); } });
     network.on("dragEnd", function(params) { if (params.nodes.length > 0) { const node = nodesDataset.get(params.nodes[0]); if (node && node.isPinned) nodesDataset.update({ id: node.id, fixed: { x: true, y: true } }); } });
     network.on("oncontext", function (params) {
-        if (isBCTreeMode) { closeContextMenu(); return; } // 圆方树模式禁止修改操作
+        if (isBCTreeMode) { closeContextMenu(); return; }
         params.event.preventDefault(); const nodeId = network.getNodeAt(params.pointer.DOM); const edgeId = network.getEdgeAt(params.pointer.DOM);
         if (nodeId !== undefined) {
             contextNodeId = nodeId; contextEdgeId = null; const node = nodesDataset.get(nodeId); document.getElementById('edgeContextMenu').style.display = 'none'; const menu = document.getElementById('contextMenu'); menu.style.left = (params.event.clientX + window.scrollX + 10) + 'px'; menu.style.top = (params.event.clientY + window.scrollY + 10) + 'px'; menu.style.display = 'flex'; document.getElementById('nodeLabelInput').value = node.label || String(nodeId); document.getElementById('nodeColorInput').value = node.customColor || '#4e6ef2'; setTimeout(() => { document.getElementById('nodeLabelInput').focus(); document.getElementById('nodeLabelInput').select(); }, 50); 
@@ -157,26 +154,119 @@ function updateLayoutButtonsVisibility() {
         if (!dfn[nodes[0]]) dfs(nodes[0], null);
     }
 
+    let showCactus = (isCactus && edgeCount >= n);
     treeBox.style.display = isTree ? '' : 'none';
     bipBtn.style.display = isBipartite ? '' : 'none';
-    cactusBox.style.display = (isCactus && edgeCount >= n) ? '' : 'none'; 
-    
-    // 圆方树按钮显示条件：是无向图并且至少有1条边
-    let isDir = document.getElementById('isDirected').value === 'true';
-    bcTreeBtn.style.display = (!isDir && edgeCount > 0) ? '' : 'none';
+    cactusBox.style.display = showCactus ? '' : 'none'; 
+    bcTreeBtn.style.display = showCactus ? '' : 'none'; // 只有满足仙人掌判定，才显示圆方树
 }
 
-// ============== 圆方树展示核心逻辑 ==============
+// 提取仙人掌底层核心计算逻辑（计算完美正多边形框架的坐标与块分布）
+function calculateCactusPositions(nodes, edges) {
+    let blocks = getCactusBlocks(nodes, edges);
+    let nodeToBlocks = {}; nodes.forEach(n => nodeToBlocks[n] = []);
+    blocks.forEach((b, i) => { b.nodes.forEach(n => nodeToBlocks[n].push(i)); });
+    
+    let startNode = nodes[0], maxBlocks = -1;
+    nodes.forEach(u => {
+        let bCount = nodeToBlocks[u].length;
+        if (bCount > maxBlocks) { maxBlocks = bCount; startNode = u; }
+    });
+
+    let nodeWeight = {}, blockWeight = {};
+    function computeWeight(u, pBlock) {
+        let w = 1; let childBlocks = nodeToBlocks[u].filter(bIdx => bIdx !== pBlock);
+        for (let bIdx of childBlocks) {
+            let b = blocks[bIdx], bw = 0;
+            for (let v of b.nodes) { if (v !== u) bw += computeWeight(v, bIdx); }
+            blockWeight[bIdx] = bw; w += bw;
+        }
+        nodeWeight[u] = w; return w;
+    }
+    computeWeight(startNode, -1);
+    
+    let pos = {}, placedNodes = new Set();
+    pos[startNode] = { x: 0, y: 0 }; placedNodes.add(startNode);
+    const L_0 = (parseInt(document.getElementById('edgeLength').value) || 100) * 1.2;
+    
+    function layoutNode(u, pBlock, baseAngle, angleRange) {
+        let childBlocks = nodeToBlocks[u].filter(bIdx => bIdx !== pBlock);
+        if (childBlocks.length === 0) return;
+        let totalW = childBlocks.reduce((sum, bIdx) => sum + blockWeight[bIdx], 0);
+        let currentAngle = baseAngle - angleRange / 2;
+        
+        for (let bIdx of childBlocks) {
+            let b = blocks[bIdx];
+            let bw = blockWeight[bIdx];
+            let bRange = angleRange * (bw / totalW); 
+            let bAngle = currentAngle + bRange / 2;
+            
+            if (b.type === 'bridge') {
+                let v = b.nodes[0] === u ? b.nodes[1] : b.nodes[0];
+                if (!placedNodes.has(v)) {
+                    pos[v] = { x: pos[u].x + L_0 * Math.cos(bAngle), y: pos[u].y + L_0 * Math.sin(bAngle) };
+                    placedNodes.add(v);
+                    layoutNode(v, bIdx, bAngle, bRange);
+                }
+            } else {
+                let K = b.nodes.length; let idx = b.nodes.indexOf(u); let seq = [];
+                for (let i = 0; i < K; i++) seq.push(b.nodes[(idx + i) % K]);
+                
+                let R = L_0 / (2 * Math.sin(Math.PI / K)); 
+                let cx = pos[u].x + R * Math.cos(bAngle);
+                let cy = pos[u].y + R * Math.sin(bAngle);
+                let phi_0 = bAngle + Math.PI;
+                let sumVWeights = 0;
+                for (let i = 1; i < K; i++) sumVWeights += nodeWeight[seq[i]];
+                if(sumVWeights === 0) sumVWeights = 1;
+                
+                for (let i = 1; i < K; i++) {
+                    let v = seq[i];
+                    let phi_i = phi_0 + i * (2 * Math.PI / K);
+                    if (!placedNodes.has(v)) {
+                        pos[v] = { x: cx + R * Math.cos(phi_i), y: cy + R * Math.sin(phi_i) };
+                        placedNodes.add(v);
+                        let vW = nodeWeight[v]; let vRange = bRange * (vW / sumVWeights);
+                        vRange = Math.min(vRange, 2 * Math.PI * 0.8); 
+                        layoutNode(v, bIdx, phi_i, vRange);
+                    }
+                }
+            }
+            currentAngle += bRange;
+        }
+    }
+    layoutNode(startNode, -1, 0, 2 * Math.PI);
+    return { pos, blocks };
+}
+
+// 仙人掌排版（复用计算核心）
+window.formatAsCactus = function() {
+    if (!network || !nodesDataset) return;
+    let nodes = nodesDataset.getIds().map(String), edges = edgesDataset.get();
+    let { pos } = calculateCactusPositions(nodes, edges);
+    
+    network.setOptions({ physics: { enabled: false } });
+    let updates = nodesDataset.get().map(node => { 
+        let style = getStyleObject(node, { isPinned: true }); 
+        if (pos[node.id]) { style.x = pos[node.id].x; style.y = pos[node.id].y; } 
+        return style; 
+    });
+    nodesDataset.update(updates); 
+    window.forcePhysicsUpdate(); // 恢复拖拽属性
+    network.fit({ animation: { duration: 600 } });
+}
+
+// ============== 极致优雅的圆方树模式 ==============
 window.toggleBCTreeMode = function() {
     const btn = document.getElementById('bcTreeBtn');
     if (isBCTreeMode) {
         // 退回正常模式
         isBCTreeMode = false;
         btn.innerText = "圆方树展示";
-        btn.style.backgroundColor = ""; // 恢复默认样式
+        btn.style.backgroundColor = ""; 
         setUIElementsLock(false);
         
-        // 恢复原有节点和边，且保留它们之前的物理坐标
+        // 恢复原有节点和边，找回它们之前的属性
         nodesDataset.clear(); edgesDataset.clear();
         nodesDataset.add(savedOriginalNodes);
         edgesDataset.add(savedOriginalEdges);
@@ -189,74 +279,67 @@ window.toggleBCTreeMode = function() {
     // 开启圆方树模式
     isBCTreeMode = true;
     btn.innerText = "取消圆方树";
-    btn.style.backgroundColor = "#e63946"; // 变成红色警示状态
+    btn.style.backgroundColor = "#e63946"; 
     setUIElementsLock(true);
 
-    // 抓取当前物理引擎中的精准坐标以备恢复
-    let positions = network.getPositions();
-    savedOriginalNodes = nodesDataset.get().map(n => { let clone = Object.assign({}, n); if(positions[n.id]) { clone.x = positions[n.id].x; clone.y = positions[n.id].y; } return clone; });
-    savedOriginalEdges = edgesDataset.get();
+    let nodesStr = nodesDataset.getIds().map(String);
+    let originalEdges = edgesDataset.get();
 
-    // 运行 Tarjan 求双连通分量 (BCC)
-    let nodes = savedOriginalNodes.map(n => String(n.id));
-    let adj = {}; nodes.forEach(n => adj[n] = []);
-    savedOriginalEdges.forEach(e => {
-        let u = String(e.from), v = String(e.to);
-        if (u !== v) { adj[u].push(v); adj[v].push(u); }
+    // 1. 获取完美的仙人掌骨架坐标，作为铺垫
+    let { pos, blocks } = calculateCactusPositions(nodesStr, originalEdges);
+
+    // 2. 抓取当前物理状态存档，以便取消后恢复用户自己的拖拉位置
+    let currentPositions = network.getPositions();
+    savedOriginalNodes = nodesDataset.get().map(n => { 
+        let clone = Object.assign({}, n); 
+        if(currentPositions[n.id]) { clone.x = currentPositions[n.id].x; clone.y = currentPositions[n.id].y; } 
+        return clone; 
     });
+    savedOriginalEdges = originalEdges;
 
-    let dfn = {}, low = {}, timer = 0, stack = [], bccList = [];
-    function tarjan(u, p) {
-        dfn[u] = low[u] = ++timer;
-        stack.push(u);
-        for (let v of adj[u]) {
-            if (v === p) continue;
-            if (!dfn[v]) {
-                tarjan(v, u);
-                low[u] = Math.min(low[u], low[v]);
-                if (low[v] >= dfn[u]) {
-                    let bcc = [], node;
-                    do { node = stack.pop(); bcc.push(node); } while (node !== v);
-                    bcc.push(u);
-                    bccList.push(bcc);
-                }
-            } else { low[u] = Math.min(low[u], dfn[v]); }
-        }
-    }
-    nodes.forEach(u => { if (!dfn[u]) tarjan(u, null); });
-
-    // 构造新图
+    // 3. 构建圆方树（圆点基于仙人掌排版固定，方点置于几何中心）
     let newNodes = [], newEdges = [];
-    // 圆点保持原样，强制解除固定状态让它们自然散开
+    
     savedOriginalNodes.forEach(n => {
         let clone = Object.assign({}, n);
-        clone.shape = 'circle'; clone.fixed = false; clone.isPinned = false; clone.color.background = '#ffffff'; clone.color.border = clone.customColor || '#4e6ef2';
+        clone.shape = 'circle'; 
+        clone.isPinned = true;
+        clone.fixed = {x: true, y: true}; // 彻底锁死
+        if (pos[n.id]) { clone.x = pos[n.id].x; clone.y = pos[n.id].y; }
+        // 圆点设为统一的白底与蓝色/自定义描边
+        clone.color = { background: '#ffffff', border: clone.customColor || '#4e6ef2' };
         newNodes.push(clone);
     });
 
-    // 方点生成
-    bccList.forEach((bcc, i) => {
+    blocks.forEach((b, i) => {
         let sqId = `_square_${i}`;
+        let cx = 0, cy = 0;
+        // 方点直接落在多边形的几何中心，或者桥的中点！
+        b.nodes.forEach(u => { cx += pos[u].x; cy += pos[u].y; });
+        cx /= b.nodes.length; cy /= b.nodes.length;
+
         newNodes.push({
             id: sqId, label: '方', shape: 'square', size: parseInt(document.getElementById('nodeSize').value) * 1.2,
             color: { background: '#f4a261', border: '#e76f51', highlight: { background: '#f4a261', border: '#e76f51' } },
             font: { color: '#fff', face: 'Arial, sans-serif' },
-            fixed: false
+            fixed: {x: true, y: true},
+            x: cx, y: cy,
+            isPinned: true,
+            shadow: { enabled: true, color: 'rgba(0,0,0,0.3)', size: 8, x: 2, y: 2 }
         });
-        bcc.forEach(u => {
-            newEdges.push({
-                from: sqId, to: u, color: { color: '#e76f51' }, width: 3, dashes: true, smooth: { type: 'continuous' }
-            });
+
+        // 原有边消失，替换为方点到圆点的虚线
+        b.nodes.forEach(u => {
+            newEdges.push({ from: sqId, to: u, color: { color: '#e76f51' }, width: 3, dashes: true, smooth: { type: 'continuous' } });
         });
     });
 
     edgesDataset.clear(); nodesDataset.clear();
     nodesDataset.add(newNodes); edgesDataset.add(newEdges);
 
-    // 让物理引擎以树的形态自然弹开
-    let currentEdgeLen = parseInt(document.getElementById('edgeLength').value) || 100;
-    network.setOptions({ physics: { enabled: true, solver: 'forceAtlas2Based', forceAtlas2Based: Object.assign({}, PHYSICS_CONFIG, { springLength: currentEdgeLen * 1.5, centralGravity: 0.005 }) } });
-    network.startSimulation();
+    // 彻底关闭物理引擎，让其如同几何插画一样静止
+    network.setOptions({ physics: { enabled: false } }); 
+    network.fit({ animation: { duration: 600 } });
 }
 
 function setUIElementsLock(locked) {
@@ -272,12 +355,36 @@ function setUIElementsLock(locked) {
     let ptrEvents = locked ? 'none' : 'auto';
     
     const elementsToLock = ['treeLayoutBox', 'cactusLayoutBox', 'bipartiteLayoutBtn', 'nodeSize', 'edgeLength'];
-    elementsToLock.forEach(id => {
-        let el = document.getElementById(id);
-        if (el) { el.style.opacity = opacity; el.style.pointerEvents = ptrEvents; }
-    });
+    elementsToLock.forEach(id => { let el = document.getElementById(id); if (el) { el.style.opacity = opacity; el.style.pointerEvents = ptrEvents; } });
 }
-// ============== 结束 ==============
+
+function getCactusBlocks(nodes, edges) {
+    let adj = {}; nodes.forEach(n => adj[n] = []);
+    edges.forEach(e => { let u = String(e.from), v = String(e.to); if (u !== v) { adj[u].push(v); adj[v].push(u); } });
+    let dfn = {}, parent = {}, timer = 0, edgeToBlock = {}, blocks = [];
+    function getEdgeKey(u, v) { return u < v ? `${u}-${v}` : `${v}-${u}`; }
+    function dfs(u, p) {
+        dfn[u] = ++timer; parent[u] = p;
+        for (let v of adj[u]) {
+            if (v === p) continue;
+            if (dfn[v]) {
+                if (dfn[v] < dfn[u]) { 
+                    let cyc = [v], curr = u, cycleEdges = [getEdgeKey(u, v)];
+                    while (curr !== v && curr !== null) { cyc.push(curr); let pNode = parent[curr]; if (pNode) cycleEdges.push(getEdgeKey(curr, pNode)); curr = pNode; }
+                    blocks.push({ type: 'cycle', nodes: cyc }); let bIdx = blocks.length - 1;
+                    for (let ek of cycleEdges) { edgeToBlock[ek] = bIdx; }
+                }
+            } else { dfs(v, u); }
+        }
+    }
+    for (let u of nodes) { if (!dfn[u]) dfs(u, null); }
+    edges.forEach(e => {
+        let u = String(e.from), v = String(e.to); if (u === v) return;
+        let ek = getEdgeKey(u, v);
+        if (edgeToBlock[ek] === undefined) { blocks.push({ type: 'bridge', nodes: [u, v] }); edgeToBlock[ek] = blocks.length - 1; }
+    });
+    return blocks;
+}
 
 window.renderGraphFromText = function() {
     if (isBCTreeMode) return;
@@ -358,117 +465,6 @@ window.formatAsBipartite = function() {
     const currentEdgeLen = parseInt(document.getElementById('edgeLength').value) || 100;
     network.setOptions({ layout: { hierarchical: { enabled: true, direction: 'LR', sortMethod: 'directed', levelSeparation: currentEdgeLen * 2.5, nodeSpacing: currentEdgeLen } }, physics: { enabled: false } });
     setTimeout(() => { let positions = network.getPositions(); network.setOptions({ layout: { hierarchical: { enabled: false } } }); nodesDataset.update(nodesDataset.get().map(node => { let style = getStyleObject(node, { isPinned: true }); if (positions[node.id]) { style.x = positions[node.id].x; style.y = positions[node.id].y; } return style; })); window.forcePhysicsUpdate(); network.fit({ animation: { duration: 600 } }); }, 50);
-}
-
-function getCactusBlocks(nodes, edges) {
-    let adj = {}; nodes.forEach(n => adj[n] = []);
-    edges.forEach(e => { let u = String(e.from), v = String(e.to); if (u !== v) { adj[u].push(v); adj[v].push(u); } });
-    let dfn = {}, parent = {}, timer = 0, edgeToBlock = {}, blocks = [];
-    function getEdgeKey(u, v) { return u < v ? `${u}-${v}` : `${v}-${u}`; }
-    function dfs(u, p) {
-        dfn[u] = ++timer; parent[u] = p;
-        for (let v of adj[u]) {
-            if (v === p) continue;
-            if (dfn[v]) {
-                if (dfn[v] < dfn[u]) { 
-                    let cyc = [v], curr = u, cycleEdges = [getEdgeKey(u, v)];
-                    while (curr !== v && curr !== null) { cyc.push(curr); let pNode = parent[curr]; if (pNode) cycleEdges.push(getEdgeKey(curr, pNode)); curr = pNode; }
-                    blocks.push({ type: 'cycle', nodes: cyc }); let bIdx = blocks.length - 1;
-                    for (let ek of cycleEdges) { edgeToBlock[ek] = bIdx; }
-                }
-            } else { dfs(v, u); }
-        }
-    }
-    for (let u of nodes) { if (!dfn[u]) dfs(u, null); }
-    edges.forEach(e => {
-        let u = String(e.from), v = String(e.to); if (u === v) return;
-        let ek = getEdgeKey(u, v);
-        if (edgeToBlock[ek] === undefined) { blocks.push({ type: 'bridge', nodes: [u, v] }); edgeToBlock[ek] = blocks.length - 1; }
-    });
-    return blocks;
-}
-
-window.formatAsCactus = function() {
-    if (!network || !nodesDataset) return;
-    let nodes = nodesDataset.getIds().map(String), edges = edgesDataset.get();
-    let blocks = getCactusBlocks(nodes, edges);
-    let nodeToBlocks = {}; nodes.forEach(n => nodeToBlocks[n] = []);
-    blocks.forEach((b, i) => { b.nodes.forEach(n => nodeToBlocks[n].push(i)); });
-    
-    let startNode = nodes[0], maxBlocks = -1;
-    nodes.forEach(u => {
-        let bCount = nodeToBlocks[u].length;
-        if (bCount > maxBlocks) { maxBlocks = bCount; startNode = u; }
-    });
-
-    let nodeWeight = {}, blockWeight = {};
-    function computeWeight(u, pBlock) {
-        let w = 1; let childBlocks = nodeToBlocks[u].filter(bIdx => bIdx !== pBlock);
-        for (let bIdx of childBlocks) {
-            let b = blocks[bIdx], bw = 0;
-            for (let v of b.nodes) { if (v !== u) bw += computeWeight(v, bIdx); }
-            blockWeight[bIdx] = bw; w += bw;
-        }
-        nodeWeight[u] = w; return w;
-    }
-    computeWeight(startNode, -1);
-    
-    let pos = {}, placedNodes = new Set();
-    pos[startNode] = { x: 0, y: 0 }; placedNodes.add(startNode);
-    const L_0 = (parseInt(document.getElementById('edgeLength').value) || 100) * 1.2;
-    
-    function layoutNode(u, pBlock, baseAngle, angleRange) {
-        let childBlocks = nodeToBlocks[u].filter(bIdx => bIdx !== pBlock);
-        if (childBlocks.length === 0) return;
-        let totalW = childBlocks.reduce((sum, bIdx) => sum + blockWeight[bIdx], 0);
-        let currentAngle = baseAngle - angleRange / 2;
-        
-        for (let bIdx of childBlocks) {
-            let b = blocks[bIdx];
-            let bw = blockWeight[bIdx];
-            let bRange = angleRange * (bw / totalW); 
-            let bAngle = currentAngle + bRange / 2;
-            
-            if (b.type === 'bridge') {
-                let v = b.nodes[0] === u ? b.nodes[1] : b.nodes[0];
-                if (!placedNodes.has(v)) {
-                    pos[v] = { x: pos[u].x + L_0 * Math.cos(bAngle), y: pos[u].y + L_0 * Math.sin(bAngle) };
-                    placedNodes.add(v);
-                    layoutNode(v, bIdx, bAngle, bRange);
-                }
-            } else {
-                let K = b.nodes.length; let idx = b.nodes.indexOf(u); let seq = [];
-                for (let i = 0; i < K; i++) seq.push(b.nodes[(idx + i) % K]);
-                
-                let R = L_0 / (2 * Math.sin(Math.PI / K)); 
-                let cx = pos[u].x + R * Math.cos(bAngle);
-                let cy = pos[u].y + R * Math.sin(bAngle);
-                let phi_0 = bAngle + Math.PI;
-                let sumVWeights = 0;
-                for (let i = 1; i < K; i++) sumVWeights += nodeWeight[seq[i]];
-                if(sumVWeights === 0) sumVWeights = 1;
-                
-                for (let i = 1; i < K; i++) {
-                    let v = seq[i];
-                    let phi_i = phi_0 + i * (2 * Math.PI / K);
-                    if (!placedNodes.has(v)) {
-                        pos[v] = { x: cx + R * Math.cos(phi_i), y: cy + R * Math.sin(phi_i) };
-                        placedNodes.add(v);
-                        let vW = nodeWeight[v]; let vRange = bRange * (vW / sumVWeights);
-                        vRange = Math.min(vRange, 2 * Math.PI * 0.8); 
-                        layoutNode(v, bIdx, phi_i, vRange);
-                    }
-                }
-            }
-            currentAngle += bRange;
-        }
-    }
-    
-    layoutNode(startNode, -1, 0, 2 * Math.PI);
-    
-    network.setOptions({ physics: { enabled: false } });
-    let updates = nodesDataset.get().map(node => { let style = getStyleObject(node, { isPinned: true }); if (pos[node.id]) { style.x = pos[node.id].x; style.y = pos[node.id].y; } return style; });
-    nodesDataset.update(updates); window.forcePhysicsUpdate(); network.fit({ animation: { duration: 600 } });
 }
 
 window.closeContextMenu = function() { document.getElementById('contextMenu').style.display = 'none'; document.getElementById('edgeContextMenu').style.display = 'none'; contextNodeId = null; contextEdgeId = null; }
