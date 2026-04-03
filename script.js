@@ -171,7 +171,9 @@ function updateLayoutButtonsVisibility() {
         if (!dfn[nodes[0]]) dfs(nodes[0], null);
     }
 
-    let showCactus = (isCactus && edgeCount >= n);
+    // 树也是仙人掌，去掉原先必须包含环 (edgeCount >= n) 的判断
+    let showCactus = isCactus;
+    
     treeBox.style.display = isTree ? '' : 'none';
     bipBtn.style.display = isBipartite ? '' : 'none';
     cactusBox.style.display = showCactus ? '' : 'none'; 
@@ -488,7 +490,6 @@ function getCactusBlocks(nodes, edges) {
     return blocks;
 }
 
-// === 更新：解析文本时忽略重边机制 ===
 window.renderGraphFromText = function() {
     if (isBCTreeMode) return;
     if (!nodesDataset || !edgesDataset) return;
@@ -501,7 +502,7 @@ window.renderGraphFromText = function() {
     if (lines.length === 0) { nodesDataset.clear(); edgesDataset.clear(); updateLayoutButtonsVisibility(); return; }
 
     let uniqueNodes = new Set(), newEdges = [];
-    let seenEdges = new Set(); // 用于追踪已经添加的边，防止重边
+    let seenEdges = new Set(); 
 
     lines.forEach(line => {
         const parts = line.split(/\s+/);
@@ -512,10 +513,8 @@ window.renderGraphFromText = function() {
             let u = String(parts[0]), v = String(parts[1]);
             uniqueNodes.add(u); uniqueNodes.add(v);
             
-            // 计算边的唯一标识。如果是有向图，1->2 和 2->1 是不同的；如果是无向图，1-2 和 2-1 是相同的。
             let edgeKey = isDirected ? `${u}->${v}` : (u < v ? `${u}-${v}` : `${v}-${u}`);
             
-            // 如果这条边之前没出现过，才把它加进视图里
             if (!seenEdges.has(edgeKey)) {
                 seenEdges.add(edgeKey);
                 let edge = { from: u, to: v };
