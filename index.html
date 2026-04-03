@@ -13,7 +13,6 @@
         <details class="gen-box" open>
             <summary>配置与生成图数据</summary>
             <div class="gen-content">
-                <!-- 新增：仙人掌图、二分图 -->
                 <div class="form-group">
                     <label>结构类型</label>
                     <select id="graphStructure">
@@ -26,8 +25,8 @@
                         <option value="graph">普通图 (Graph)</option>
                     </select>
                 </div>
-                <div class="form-group"><label>节点数 (N)</label><input type="number" id="n" value="10" min="1" max="300"></div>
-                <div class="form-group"><label>边数 (M)</label><input type="number" id="m" value="15" min="0"></div>
+                <div class="form-group"><label>节点数 (N)</label><input type="number" id="n" value="15" min="1" max="300"></div>
+                <div class="form-group"><label>边数 (M)</label><input type="number" id="m" value="20" min="0"></div>
                 <div class="form-group"><label>有向图</label><select id="isDirected"><option value="false">无向 (Undirected)</option><option value="true">有向 (Directed)</option></select></div>
                 <div class="form-group"><label>边权</label><select id="isWeighted"><option value="false">无权 (Unweighted)</option><option value="true">有权 (Weighted)</option></select></div>
                 <div class="form-group"><label>最大边权</label><input type="number" id="maxw" value="10" min="1" disabled></div>
@@ -49,12 +48,14 @@
             <button class="btn" onclick="pinAll()">固定所有</button>
             <button class="btn" onclick="unpinAll()">全部解除</button>
             <div class="divider"></div>
+            
             <div class="tree-layout-box">
                 <button class="btn-tree" onclick="formatAsTree()">树状排版</button>
                 <div class="tree-input-wrapper"><span class="tree-label">根:</span><input type="text" id="treeRootInput" value="1" title="设置树的根节点标识符"></div>
             </div>
-            <!-- 新增：二分图左右排版按钮 -->
-            <button class="btn btn-tree-alone" onclick="formatAsBipartite()">二分图排版 (LR)</button>
+            
+            <!-- 新增二分图左右排版按钮 -->
+            <button class="btn" style="height:36px; border-color:var(--primary); color:var(--primary);" onclick="formatAsBipartite()">二分图排版(左右)</button>
         </div>
         <div id="mynetwork"></div>
     </div>
