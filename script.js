@@ -706,7 +706,7 @@ window.generateData = function() {
 
 window.copyOutput = function() { navigator.clipboard.writeText(document.getElementById('output').value).then(() => { const fb = document.getElementById('copyFeedback'); fb.textContent = '已复制！'; fb.style.opacity = 1; setTimeout(() => fb.style.opacity = 0, 2000); }); }
 
-window.exportImage = function(format) {
+window。exportImage = function(format) {
     if (!network) return;
     
     const container = document.getElementById('mynetwork');
@@ -716,22 +716,28 @@ window.exportImage = function(format) {
         return;
     }
 
+    // 创建一个临时画布
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = canvas.width;
+    tempCanvas.height = canvas.height;
+    const ctx = tempCanvas.getContext('2d');
+    
+    // 强制铺设一层纯白色背景，防止 PNG 在深色看图软件下透出黑底
+    ctx.fillStyle = '#ffffff'; 
+    ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+    
+    // 将 vis-network 的原始透明画布绘制在白底之上
+    ctx.drawImage(canvas, 0, 0);
+
+    // 转换为对应格式的 Base64 数据
     let dataURL;
     if (format === 'jpeg') {
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = canvas.width;
-        tempCanvas.height = canvas.height;
-        const ctx = tempCanvas.getContext('2d');
-        
-        ctx.fillStyle = '#ffffff'; 
-        ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-        ctx.drawImage(canvas, 0, 0);
-        
         dataURL = tempCanvas.toDataURL('image/jpeg', 1.0);
     } else {
-        dataURL = canvas.toDataURL('image/png');
+        dataURL = tempCanvas.toDataURL('image/png');
     }
 
+    // 触发下载
     const a = document.createElement('a');
     a.href = dataURL;
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
