@@ -84,36 +84,6 @@ window.forcePhysicsUpdate = function() {
     network.startSimulation();
 }
 
-// 提取统一步骤：动态更新节点和连线的宽度防止缩放失调
-window.syncScaleUI = function() {
-    if (!network || !nodesDataset || !edgesDataset) return;
-    let scale = network.getScale();
-    
-    // 动态调整节点边框
-    let nodeUpdates = [];
-    nodesDataset.forEach(node => {
-        let baseBorder = node.isPinned ? 4 : 2;
-        // 动态计算，当缩放特别小时保证框不会压扁文字，采用0.1的步进值避免过于频繁触发更新
-        let expectedBorder = parseFloat(Math.max(0.2, baseBorder * scale).toFixed(1));
-        if (node.borderWidth !== expectedBorder) {
-            nodeUpdates.push({ id: node.id, borderWidth: expectedBorder, borderWidthSelected: expectedBorder });
-        }
-    });
-    if (nodeUpdates.length > 0) nodesDataset.update(nodeUpdates);
-
-    // 动态调整边线粗细
-    let edgeUpdates = [];
-    edgesDataset.forEach(edge => {
-        // 圆方树模式下原本使用虚线的边默认是 3，其它线默认是 2
-        let baseEdgeWidth = edge.dashes ? 3 : 2; 
-        let expectedEdgeWidth = parseFloat(Math.max(0.3, baseEdgeWidth * scale).toFixed(1));
-        if (edge.width !== expectedEdgeWidth) {
-            edgeUpdates.push({ id: edge.id, width: expectedEdgeWidth });
-        }
-    });
-    if (edgeUpdates.length > 0) edgesDataset.update(edgeUpdates);
-}
-
 function getStyleObject(node, updates) {
     node = node || {};
     let isPinned = updates.isPinned !== undefined ? updates.isPinned : (node.isPinned || false);
@@ -129,12 +99,7 @@ function getStyleObject(node, updates) {
         colorObj = updates.color || { background: isPinned ? '#f3f4f6' : '#ffffff', border: customBorder, highlight: { background: isPinned ? '#e5e7eb' : '#f0f4ff', border: customBorder }, hover: { background: isPinned ? '#e5e7eb' : '#f8f9fa', border: hoverBorder } };
     }
     
-    // 即时生成节点时，也赋予正确的动态边宽
-    let currentScale = network ? network.getScale() : 1;
-    let baseBorder = isPinned ? 4 : 2;
-    let expectedBorder = parseFloat(Math.max(0.2, baseBorder * currentScale).toFixed(1));
-    
-    return { id: node.id || updates.id, label: label, shape: shape, isPinned: isPinned, customColor: customBorder, fixed: isPinned ? { x: true, y: true } : { x: false, y: false }, borderWidth: expectedBorder, borderWidthSelected: expectedBorder, color: colorObj, shadow: isPinned ? { enabled: true, color: 'rgba(0,0,0,0.3)', size: 8, x: 2, y: 2 } : true };
+    return { id: node.id || updates.id, label: label, shape: shape, isPinned: isPinned, customColor: customBorder, fixed: isPinned ? { x: true, y: true } : { x: false, y: false }, borderWidth: isPinned ? 4 : 2, borderWidthSelected: isPinned ? 4 : 2, color: colorObj, shadow: isPinned ? { enabled: true, color: 'rgba(0,0,0,0.3)', size: 8, x: 2, y: 2 } : true };
 }
 
 function updateNodeStyle(nodeId, updates) { let node = nodesDataset.get(nodeId); if (!node) return; nodesDataset.update(getStyleObject(node, updates)); }
@@ -162,25 +127,7 @@ function initNetwork() {
             contextEdgeId = edgeId; contextNodeId = null; const edge = edgesDataset.get(edgeId); document.getElementById('contextMenu').style.display = 'none'; const menu = document.getElementById('edgeContextMenu'); menu.style.left = (params.event.clientX + window.scrollX + 10) + 'px'; menu.style.top = (params.event.clientY + window.scrollY + 10) + 'px'; menu.style.display = 'flex'; document.getElementById('edgeLabelInput').value = edge.label || ''; setTimeout(() => { document.getElementById('edgeLabelInput').focus(); document.getElementById('edgeLabelInput').select(); }, 50);
         } else { closeContextMenu(); }
     });
-    
-    // 监听缩放事件，控制最小和最大缩放级别，以及同步边界框
-    network.on("zoom", function (params) {
-        closeContextMenu();
-        let scale = network.getScale();
-        const MIN_SCALE = 0.15;
-        const MAX_SCALE = 3.0;
-
-        // 加 0.0001 是防浮点精度导致的动画死循环
-        if (scale <= MIN_SCALE - 0.0001) {
-            network.moveTo({ scale: MIN_SCALE });
-            scale = MIN_SCALE;
-        } else if (scale >= MAX_SCALE + 0.0001) {
-            network.moveTo({ scale: MAX_SCALE });
-            scale = MAX_SCALE;
-        }
-
-        window.syncScaleUI();
-    });
+    network.on("zoom", closeContextMenu);
 }
 
 function updateLayoutButtonsVisibility() {
@@ -592,7 +539,7 @@ window.renderGraphFromText = function() {
 
     edgesDataset.clear(); edgesDataset.add(newEdges); 
     updateLayoutButtonsVisibility();
-    setTimeout(() => { window.forcePhysicsUpdate(); window.syncScaleUI(); }, 10);
+    setTimeout(() => { window.forcePhysicsUpdate(); }, 10);
 }
 
 document.addEventListener('keydown', e => {
@@ -706,7 +653,8 @@ window.generateData = function() {
 
 window.copyOutput = function() { navigator.clipboard.writeText(document.getElementById('output').value).then(() => { const fb = document.getElementById('copyFeedback'); fb.textContent = '已复制！'; fb.style.opacity = 1; setTimeout(() => fb.style.opacity = 0, 2000); }); }
 
-window。exportImage = function(format) {
+// ====== 新增：导出图片逻辑 ======
+window.exportImage = function(format) {
     if (!network) return;
     
     const container = document.getElementById('mynetwork');
@@ -716,28 +664,25 @@ window。exportImage = function(format) {
         return;
     }
 
-    // 创建一个临时画布
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = canvas.width;
-    tempCanvas.height = canvas.height;
-    const ctx = tempCanvas.getContext('2d');
-    
-    // 强制铺设一层纯白色背景，防止 PNG 在深色看图软件下透出黑底
-    ctx.fillStyle = '#ffffff'; 
-    ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-    
-    // 将 vis-network 的原始透明画布绘制在白底之上
-    ctx.drawImage(canvas, 0, 0);
-
-    // 转换为对应格式的 Base64 数据
     let dataURL;
     if (format === 'jpeg') {
+        // JPG 不支持透明度，直接导出透明背景会变成黑色。因此需要建立临时画布填充白底
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        const ctx = tempCanvas.getContext('2d');
+        
+        ctx.fillStyle = '#ffffff'; // 填充白色背景
+        ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+        ctx.drawImage(canvas, 0, 0);
+        
         dataURL = tempCanvas.toDataURL('image/jpeg', 1.0);
     } else {
-        dataURL = tempCanvas.toDataURL('image/png');
+        // PNG 默认支持透明度，直接导出
+        dataURL = canvas.toDataURL('image/png');
     }
 
-    // 触发下载
+    // 创建虚拟 a 标签触发下载
     const a = document.createElement('a');
     a.href = dataURL;
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -747,6 +692,7 @@ window。exportImage = function(format) {
     a.click();
     document.body.removeChild(a);
 }
+// =================================
 
 document.addEventListener('DOMContentLoaded', () => {
     try {
