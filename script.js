@@ -653,7 +653,7 @@ window.generateData = function() {
 
 window.copyOutput = function() { navigator.clipboard.writeText(document.getElementById('output').value).then(() => { const fb = document.getElementById('copyFeedback'); fb.textContent = '已复制！'; fb.style.opacity = 1; setTimeout(() => fb.style.opacity = 0, 2000); }); }
 
-// ====== 新增：导出图片逻辑 ======
+// ====== 新增：导出图片逻辑（已修复透明背景变黑的问题） ======
 window.exportImage = function(format) {
     if (!network) return;
     
@@ -664,25 +664,28 @@ window.exportImage = function(format) {
         return;
     }
 
+    // 创建一个临时画布
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = canvas.width;
+    tempCanvas.height = canvas.height;
+    const ctx = tempCanvas.getContext('2d');
+    
+    // 强制铺设一层纯白色背景，防止 PNG 和 JPG 在部分看图软件下变黑
+    ctx.fillStyle = '#ffffff'; 
+    ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+    
+    // 将 vis-network 的原始画布绘制在白底之上
+    ctx.drawImage(canvas, 0, 0);
+
+    // 转换为对应格式的 Base64 数据
     let dataURL;
     if (format === 'jpeg') {
-        // JPG 不支持透明度，直接导出透明背景会变成黑色。因此需要建立临时画布填充白底
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = canvas.width;
-        tempCanvas.height = canvas.height;
-        const ctx = tempCanvas.getContext('2d');
-        
-        ctx.fillStyle = '#ffffff'; // 填充白色背景
-        ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-        ctx.drawImage(canvas, 0, 0);
-        
         dataURL = tempCanvas.toDataURL('image/jpeg', 1.0);
     } else {
-        // PNG 默认支持透明度，直接导出
-        dataURL = canvas.toDataURL('image/png');
+        dataURL = tempCanvas.toDataURL('image/png');
     }
 
-    // 创建虚拟 a 标签触发下载
+    // 触发下载
     const a = document.createElement('a');
     a.href = dataURL;
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -692,7 +695,7 @@ window.exportImage = function(format) {
     a.click();
     document.body.removeChild(a);
 }
-// =================================
+// ========================================================
 
 document.addEventListener('DOMContentLoaded', () => {
     try {
